@@ -35,6 +35,7 @@ graph TB
         MainWindow[Main Window]
         ProjectPanel[Project Panel]
         WorktreePanel[Worktree Panel]
+        CommandPanel[Command Output Panel]
         Dialogs[Dialogs & Forms]
     end
 
@@ -42,6 +43,7 @@ graph TB
         ProjectService[Project Service]
         WorktreeService[Worktree Service]
         GitService[Git Service]
+        CommandService[Command Execution Service]
         ValidationService[Validation Service]
     end
 
@@ -97,6 +99,11 @@ The application follows a layered architecture:
   │ [Project 2] │ [Worktree 2] [dev]    │
   │ [+ Add]     │ [+ New Worktree]      │
   ├─────────────┴───────────────────────┤
+  │ Command Output Panel (Collapsible)  │
+  │ $ npm test                          │
+  │ > Running tests...                  │
+  │ ✓ All tests passed                  │
+  ├─────────────────────────────────────┤
   │ Status Bar                          │
   └─────────────────────────────────────┘
   ```
@@ -116,8 +123,19 @@ The application follows a layered architecture:
 - **Features**:
   - Worktree list with branch and status information
   - Create/remove worktree actions
-  - Context menu for worktree operations
+  - Context menu for worktree operations (including "Run Command")
   - Detailed worktree information display
+
+#### 5. Command Output Panel (`CommandOutputPanel`)
+
+- **Purpose**: Display real-time command execution output and results
+- **Features**:
+  - Collapsible panel that expands when commands are executed
+  - Real-time streaming of stdout and stderr
+  - Syntax highlighting for command output
+  - Command history and execution status
+  - Clear output and copy functionality
+  - Execution time and exit code display
 
 ### Service Layer
 
@@ -157,7 +175,18 @@ The application follows a layered architecture:
       def get_branch_list(self, repo_path: str) -> List[str]
   ```
 
-#### 4. Validation Service (`ValidationService`)
+#### 4. Command Execution Service (`CommandService`)
+
+- **Interface**:
+  ```python
+  class CommandService:
+      def execute_command(self, command: str, worktree_path: str) -> CommandExecution
+      def get_command_history(self, worktree_path: str) -> List[CommandExecution]
+      def cancel_command(self, execution_id: str) -> bool
+      def validate_command(self, command: str) -> ValidationResult
+  ```
+
+#### 5. Validation Service (`ValidationService`)
 
 - **Interface**:
   ```python
@@ -166,6 +195,7 @@ The application follows a layered architecture:
       def validate_worktree_path(self, path: str) -> ValidationResult
       def validate_branch_name(self, branch: str) -> ValidationResult
       def check_uncommitted_changes(self, worktree_path: str) -> ValidationResult
+      def validate_command_safety(self, command: str) -> ValidationResult
   ```
 
 ## Data Models
@@ -207,7 +237,27 @@ class Worktree:
     def get_relative_path(self, base_path: str) -> str
 ```
 
-#### 3. Configuration Model
+#### 3. Command Execution Model
+
+```python
+@dataclass
+class CommandExecution:
+    id: str
+    command: str
+    worktree_path: str
+    start_time: datetime
+    end_time: Optional[datetime]
+    exit_code: Optional[int]
+    stdout: str
+    stderr: str
+    status: CommandStatus  # RUNNING, COMPLETED, FAILED, CANCELLED
+
+    def is_running(self) -> bool
+    def get_duration(self) -> Optional[timedelta]
+    def get_formatted_output(self) -> str
+```
+
+#### 4. Configuration Model
 
 ```python
 @dataclass
@@ -215,11 +265,13 @@ class AppConfig:
     projects: List[ProjectConfig]
     window_geometry: Dict[str, int]
     preferences: UserPreferences
+    command_history: Dict[str, List[CommandExecution]]
 
     def save(self) -> None
     def load(self) -> 'AppConfig'
     def add_project(self, project: ProjectConfig) -> None
     def remove_project(self, project_id: str) -> None
+    def add_command_execution(self, execution: CommandExecution) -> None
 ```
 
 ### State Management
@@ -230,6 +282,7 @@ The application uses a centralized state management approach:
 - **UI State**: Managed by individual controllers
 - **Configuration State**: Managed by `ConfigManager`
 - **Operation State**: Managed by `OperationManager` for async operations
+- **Command State**: Managed by `CommandManager` for active command executions
 
 ## Error Handling
 
@@ -250,10 +303,17 @@ The application uses a centralized state management approach:
    - Path conflicts
 
 3. **Validation Errors**
+
    - Invalid repository structure
    - Branch name conflicts
    - Worktree path conflicts
    - Configuration errors
+
+4. **Command Execution Errors**
+   - Command not found
+   - Permission denied
+   - Command timeout
+   - Process termination errors
 
 ### Error Handling Strategy
 
@@ -262,6 +322,7 @@ class ErrorHandler:
     def handle_git_error(self, error: GitError) -> UserAction
     def handle_filesystem_error(self, error: FileSystemError) -> UserAction
     def handle_validation_error(self, error: ValidationError) -> UserAction
+    def handle_command_error(self, error: CommandError) -> UserAction
     def show_error_dialog(self, error: AppError) -> None
     def log_error(self, error: Exception) -> None
 ```
@@ -273,6 +334,8 @@ class ErrorHandler:
 - **Error Dialogs**: For detailed error information
 - **Validation Tooltips**: For inline validation feedback
 - **Success Notifications**: For operation confirmations
+- **Real-time Command Output**: For command execution feedback
+- **Command Status Indicators**: For running command visualization
 
 ## Testing Strategy
 
@@ -284,12 +347,14 @@ class ErrorHandler:
    - Model validation
    - Utility functions
    - Git command parsing
+   - Command execution logic
 
 2. **Integration Tests** (20%)
 
    - Service interactions
    - File system operations
    - Git command execution
+   - Command execution workflows
    - Configuration persistence
 
 3. **UI Tests** (10%)
@@ -305,19 +370,23 @@ tests/
 ├── unit/
 │   ├── services/
 │   ├── models/
+│   ├── command_execution/
 │   └── utils/
 ├── integration/
 │   ├── git_operations/
+│   ├── command_workflows/
 │   ├── file_system/
 │   └── configuration/
 └── ui/
     ├── workflows/
+    ├── command_panel/
     └── dialogs/
 ```
 
 ### Mock Strategy
 
 - **Git Operations**: Mock `GitService` for predictable testing
+- **Command Execution**: Mock `CommandService` and subprocess calls
 - **File System**: Use temporary directories for isolation
 - **UI Components**: Mock heavy UI components for unit tests
 - **External Dependencies**: Mock system calls and external processes
@@ -335,9 +404,10 @@ tests/
 
 1. **Lazy Loading**: Load worktree information on demand
 2. **Caching**: Cache Git command results with TTL
-3. **Background Operations**: Use QThread for Git operations
+3. **Background Operations**: Use QThread for Git operations and command execution
 4. **Debouncing**: Debounce rapid UI updates
-5. **Memory Management**: Proper cleanup of Qt objects
+5. **Memory Management**: Proper cleanup of Qt objects and command processes
+6. **Process Management**: Efficient handling of concurrent command executions
 
 ### Scalability Limits
 
@@ -345,19 +415,94 @@ tests/
 - **Worktrees**: Up to 100 worktrees per project
 - **UI Responsiveness**: Sub-100ms response for UI interactions
 - **Git Operations**: Timeout after 30 seconds for Git commands
+- **Command Execution**: Configurable timeout for user commands (default 5 minutes)
+- **Concurrent Commands**: Support up to 5 simultaneous command executions
+
+## Configuration and Logging
+
+### OS-Specific Storage Locations
+
+The application follows OS conventions for configuration and log storage:
+
+#### Configuration Storage
+
+- **macOS**: `~/Library/Application Support/GitWorktreeManager/`
+- **Windows**: `%APPDATA%/GitWorktreeManager/`
+- **Linux**: `~/.config/git-worktree-manager/`
+
+#### Log Storage
+
+- **macOS**: `~/Library/Logs/GitWorktreeManager/`
+- **Windows**: `%LOCALAPPDATA%/GitWorktreeManager/Logs/`
+- **Linux**: `~/.local/share/git-worktree-manager/logs/`
+
+#### Configuration Files Structure
+
+```
+config/
+├── app_config.json          # Main application configuration
+├── projects.json            # Project definitions and settings
+├── window_state.json        # Window geometry and UI state
+└── preferences.json         # User preferences and settings
+
+logs/
+├── app.log                  # Main application log
+├── git_operations.log       # Git command execution log
+├── command_execution.log    # User command execution log
+└── errors.log              # Error and exception log
+```
+
+#### Path Management Service
+
+```python
+class PathManager:
+    @staticmethod
+    def get_config_dir() -> Path:
+        """Get OS-appropriate configuration directory"""
+
+    @staticmethod
+    def get_log_dir() -> Path:
+        """Get OS-appropriate log directory"""
+
+    @staticmethod
+    def get_cache_dir() -> Path:
+        """Get OS-appropriate cache directory"""
+
+    @staticmethod
+    def ensure_directories() -> None:
+        """Create necessary directories if they don't exist"""
+```
+
+### Logging Strategy
+
+#### Log Levels and Categories
+
+- **DEBUG**: Detailed diagnostic information
+- **INFO**: General application flow and operations
+- **WARNING**: Potentially harmful situations
+- **ERROR**: Error events that don't stop the application
+- **CRITICAL**: Serious errors that may cause termination
+
+#### Log Rotation
+
+- **File Size**: Rotate when logs exceed 10MB
+- **Retention**: Keep last 5 log files
+- **Compression**: Compress rotated logs to save space
 
 ## Security Considerations
 
 ### Input Validation
 
 - **Path Sanitization**: Prevent directory traversal attacks
-- **Command Injection**: Sanitize all Git command parameters
+- **Command Injection**: Sanitize all Git command parameters and user commands
 - **File Permissions**: Validate file system permissions before operations
 - **Branch Names**: Validate branch names against Git standards
+- **Command Safety**: Validate and sanitize user-provided commands to prevent malicious execution
 
 ### Data Protection
 
-- **Configuration Security**: Store sensitive data securely
+- **Configuration Security**: Store sensitive data securely in OS-appropriate locations
 - **Temporary Files**: Clean up temporary files after operations
 - **Process Isolation**: Isolate Git operations from main process
 - **Error Information**: Sanitize error messages to prevent information leakage
+- **Log Security**: Ensure log files have appropriate permissions and don't contain sensitive data

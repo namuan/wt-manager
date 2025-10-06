@@ -104,6 +104,21 @@ The Git Worktree Manager is a modern PyQt6-based GUI application that simplifies
 
 ### Requirement 9
 
+**User Story:** As a developer, I want to execute commands within specific worktrees, so that I can run development tasks directly from the interface without switching contexts.
+
+#### Acceptance Criteria
+
+1. WHEN I right-click on a worktree THEN the system SHALL provide an option to "Run Command" in the context menu
+2. WHEN I select "Run Command" THEN the system SHALL display a command input dialog with the worktree path context
+3. WHEN I execute a command THEN the system SHALL run it in the selected worktree directory
+4. WHEN a command is running THEN the system SHALL capture both standard output and standard error streams
+5. WHEN a command is running THEN the system SHALL display the output in real-time in a dedicated output panel
+6. WHEN a command is executing THEN the system SHALL remain responsive and allow other operations
+7. WHEN a command completes THEN the system SHALL show the final exit code and execution time
+8. WHEN displaying command output THEN the system SHALL format it with syntax highlighting and proper formatting
+
+### Requirement 10
+
 **User Story:** As a developer, I want a modern, responsive interface, so that the tool is pleasant and efficient to use.
 
 #### Acceptance Criteria
