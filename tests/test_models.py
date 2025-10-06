@@ -1,11 +1,18 @@
 """Test cases for the data models."""
 
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
-from wt_manager.models import Project, ProjectStatus, Worktree
+from wt_manager.models import (
+    CommandExecution,
+    CommandHistory,
+    CommandStatus,
+    Project,
+    ProjectStatus,
+    Worktree,
+)
 
 
 class TestWorktreeModel:
@@ -242,3 +249,613 @@ class TestProjectModel:
 
         assert project1 == project2  # Same ID
         assert project1 != project3  # Different ID
+
+
+class TestCommandExecutionModel:
+    """Test cases for the CommandExecution model."""
+
+    def test_command_execution_creation(self):
+        """Test basic command execution creation."""
+        start_time = datetime.now()
+        execution = CommandExecution(
+            id="test-cmd-1",
+            command="git status",
+            worktree_path="/tmp/test-worktree",
+            start_time=start_time,
+        )
+
+        assert execution.id == "test-cmd-1"
+        assert execution.command == "git status"
+        assert execution.worktree_path == "/tmp/test-worktree"
+        assert execution.start_time == start_time
+        assert execution.status == CommandStatus.PENDING
+        assert execution.is_running() is False
+        assert execution.is_finished() is False
+
+    def test_command_execution_lifecycle(self):
+        """Test command execution lifecycle methods."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo hello",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        self._test_execution_started(execution)
+        self._test_execution_output(execution)
+        self._test_execution_completed(execution)
+
+    def _test_execution_started(self, execution):
+        """Helper to test execution start."""
+        execution.mark_started(process_id=12345)
+        assert execution.status == CommandStatus.RUNNING
+        assert execution.process_id == 12345
+        assert execution.is_running() is True
+        assert execution.is_finished() is False
+
+    def _test_execution_output(self, execution):
+        """Helper to test execution output."""
+        execution.append_stdout("hello\n")
+        execution.append_stderr("warning: test\n")
+        assert execution.stdout == "hello\n"
+        assert execution.stderr == "warning: test\n"
+
+    def _test_execution_completed(self, execution):
+        """Helper to test execution completion."""
+        execution.mark_completed(exit_code=0)
+        assert execution.status == CommandStatus.COMPLETED
+        assert execution.exit_code == 0
+        assert execution.process_id is None
+        assert execution.is_running() is False
+        assert execution.is_finished() is True
+        assert execution.is_successful() is True
+        assert execution.end_time is not None
+
+    def test_command_execution_failure(self):
+        """Test command execution failure handling."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="false",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        execution.mark_started()
+        execution.mark_completed(exit_code=1)
+
+        assert execution.status == CommandStatus.FAILED
+        assert execution.exit_code == 1
+        assert execution.is_successful() is False
+        assert execution.is_finished() is True
+
+    def test_command_execution_cancellation(self):
+        """Test command execution cancellation."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        execution.mark_started()
+        execution.mark_cancelled()
+
+        assert execution.status == CommandStatus.CANCELLED
+        assert execution.is_finished() is True
+        assert execution.is_successful() is False
+        assert execution.end_time is not None
+
+    def test_command_execution_timeout(self):
+        """Test command execution timeout handling."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="sleep 100",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+            timeout_seconds=5,
+        )
+
+        execution.mark_started()
+        execution.mark_timeout()
+
+        assert execution.status == CommandStatus.TIMEOUT
+        assert execution.is_finished() is True
+        assert execution.is_successful() is False
+
+    def test_duration_calculation(self):
+        """Test duration calculation methods."""
+        start_time = datetime.now()
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=start_time,
+        )
+
+        # Running command should return current duration
+        execution.mark_started()
+        duration = execution.get_duration()
+        assert duration is not None
+        assert duration.total_seconds() >= 0
+
+        # Completed command should return exact duration
+        end_time = start_time + timedelta(seconds=2.5)
+        execution.end_time = end_time
+        execution.status = CommandStatus.COMPLETED
+
+        duration = execution.get_duration()
+        assert duration == timedelta(seconds=2.5)
+
+        # Test duration display
+        duration_display = execution.get_duration_display()
+        assert "2.5s" in duration_display
+
+    def test_output_formatting(self):
+        """Test output formatting methods."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test with no output
+        formatted = execution.get_formatted_output()
+        assert formatted == "(no output)"
+
+        # Test with stdout only
+        execution.stdout = "Hello World\n"
+        formatted = execution.get_formatted_output()
+        assert "=== STDOUT ===" in formatted
+        assert "Hello World" in formatted
+
+        # Test with both stdout and stderr
+        execution.stderr = "Warning: test\n"
+        formatted = execution.get_formatted_output()
+        assert "=== STDOUT ===" in formatted
+        assert "=== STDERR ===" in formatted
+        assert "Hello World" in formatted
+        assert "Warning: test" in formatted
+
+    def test_status_display(self):
+        """Test status display methods."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test pending status
+        assert execution.get_status_display() == "Pending"
+
+        # Test running status
+        execution.status = CommandStatus.RUNNING
+        assert execution.get_status_display() == "Running"
+
+        # Test completed status with exit code
+        execution.mark_completed(exit_code=0)
+        status_display = execution.get_status_display()
+        assert "Completed" in status_display
+        assert "exit code: 0" in status_display
+
+    def test_command_display_truncation(self):
+        """Test command display truncation."""
+        long_command = "echo " + "a" * 100
+        execution = CommandExecution(
+            id="test-cmd",
+            command=long_command,
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test truncation
+        display = execution.get_command_display(max_length=20)
+        assert len(display) <= 20
+        assert display.endswith("...")
+
+        # Test no truncation needed
+        short_display = execution.get_command_display(max_length=200)
+        assert short_display == long_command
+
+    def test_timeout_detection(self):
+        """Test timeout detection."""
+        # Create execution with 1 second timeout
+        past_time = datetime.now() - timedelta(seconds=2)
+        execution = CommandExecution(
+            id="test-cmd",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=past_time,
+            timeout_seconds=1,
+        )
+
+        execution.status = CommandStatus.RUNNING
+        assert execution.is_timed_out() is True
+
+        # Test no timeout when not running
+        execution.status = CommandStatus.COMPLETED
+        assert execution.is_timed_out() is False
+
+    def _create_test_command_execution(self):
+        """Create a test CommandExecution instance."""
+        start_time = datetime.now()
+        end_time = start_time + timedelta(seconds=5)
+
+        return CommandExecution(
+            id="test-cmd-1",
+            command="git status",
+            worktree_path="/tmp/test-worktree",
+            start_time=start_time,
+            end_time=end_time,
+            exit_code=0,
+            stdout="On branch main\n",
+            stderr="",
+            status=CommandStatus.COMPLETED,
+            timeout_seconds=30,
+        )
+
+    def _assert_basic_attributes_equal(self, original, restored):
+        """Assert basic attributes are equal."""
+        assert restored.id == original.id
+        assert restored.command == original.command
+        assert restored.worktree_path == original.worktree_path
+
+    def _assert_time_attributes_equal(self, original, restored):
+        """Assert time attributes are equal."""
+        assert restored.start_time == original.start_time
+        assert restored.end_time == original.end_time
+
+    def _assert_execution_results_equal(self, original, restored):
+        """Assert execution results are equal."""
+        assert restored.exit_code == original.exit_code
+        assert restored.stdout == original.stdout
+        assert restored.stderr == original.stderr
+
+    def _assert_status_attributes_equal(self, original, restored):
+        """Assert status and timeout attributes are equal."""
+        assert restored.status == original.status
+        assert restored.timeout_seconds == original.timeout_seconds
+
+    def _assert_command_executions_equal(self, original, restored):
+        """Assert that two CommandExecution instances are equal."""
+        self._assert_basic_attributes_equal(original, restored)
+        self._assert_time_attributes_equal(original, restored)
+        self._assert_execution_results_equal(original, restored)
+        self._assert_status_attributes_equal(original, restored)
+
+    def test_serialization(self):
+        """Test command execution serialization and deserialization."""
+        original = self._create_test_command_execution()
+
+        # Test dict serialization
+        data = original.to_dict()
+        restored = CommandExecution.from_dict(data)
+        self._assert_command_executions_equal(original, restored)
+
+        # Test JSON serialization
+        json_str = original.to_json()
+        from_json = CommandExecution.from_json(json_str)
+        assert from_json == original
+
+    def test_equality(self):
+        """Test command execution equality comparison."""
+        execution1 = CommandExecution(
+            id="test-1",
+            command="git status",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        execution2 = CommandExecution(
+            id="test-1",
+            command="git log",
+            worktree_path="/tmp/other",
+            start_time=datetime.now(),
+        )
+        execution3 = CommandExecution(
+            id="test-2",
+            command="git status",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        assert execution1 == execution2  # Same ID
+        assert execution1 != execution3  # Different ID
+
+
+class TestCommandHistoryModel:
+    """Test cases for the CommandHistory model."""
+
+    def test_command_history_creation(self):
+        """Test basic command history creation."""
+        history = CommandHistory(worktree_path="/tmp/test-worktree")
+
+        assert history.worktree_path == "/tmp/test-worktree"
+        assert len(history.executions) == 0
+        assert history.max_history_size == 100
+
+    def test_add_execution(self):
+        """Test adding executions to history."""
+        history = CommandHistory()
+
+        execution1 = CommandExecution(
+            id="cmd-1",
+            command="git status",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        execution2 = CommandExecution(
+            id="cmd-2",
+            command="git log",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        history.add_execution(execution1)
+        assert len(history) == 1
+
+        history.add_execution(execution2)
+        assert len(history) == 2
+
+        # Most recent should be first
+        assert history.executions[0] == execution2
+        assert history.executions[1] == execution1
+
+    def test_history_size_limit(self):
+        """Test history size limiting."""
+        history = CommandHistory(max_history_size=3)
+
+        # Add more executions than the limit
+        for i in range(5):
+            execution = CommandExecution(
+                id=f"cmd-{i}",
+                command=f"echo {i}",
+                worktree_path="/tmp/test",
+                start_time=datetime.now(),
+            )
+            history.add_execution(execution)
+
+        # Should only keep the most recent 3
+        assert len(history) == 3
+        assert history.executions[0].command == "echo 4"  # Most recent
+        assert history.executions[2].command == "echo 2"  # Oldest kept
+
+    def test_get_recent_executions(self):
+        """Test getting recent executions."""
+        history = CommandHistory()
+
+        # Add several executions
+        for i in range(10):
+            execution = CommandExecution(
+                id=f"cmd-{i}",
+                command=f"echo {i}",
+                worktree_path="/tmp/test",
+                start_time=datetime.now(),
+            )
+            history.add_execution(execution)
+
+        # Get recent executions
+        recent = history.get_recent_executions(limit=3)
+        assert len(recent) == 3
+        assert recent[0].command == "echo 9"  # Most recent
+        assert recent[2].command == "echo 7"
+
+    def test_get_running_executions(self):
+        """Test getting running executions."""
+        history = CommandHistory()
+
+        # Add mix of running and completed executions
+        running_exec = CommandExecution(
+            id="running-cmd",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        running_exec.mark_started()
+
+        completed_exec = CommandExecution(
+            id="completed-cmd",
+            command="echo done",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        completed_exec.mark_completed(exit_code=0)
+
+        history.add_execution(running_exec)
+        history.add_execution(completed_exec)
+
+        running = history.get_running_executions()
+        assert len(running) == 1
+        assert running[0] == running_exec
+
+    def test_get_execution_by_id(self):
+        """Test getting execution by ID."""
+        history = CommandHistory()
+
+        execution = CommandExecution(
+            id="test-cmd-id",
+            command="git status",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        history.add_execution(execution)
+
+        found = history.get_execution_by_id("test-cmd-id")
+        assert found == execution
+
+        not_found = history.get_execution_by_id("non-existent")
+        assert not_found is None
+
+    def test_get_executions_by_command(self):
+        """Test getting executions by command."""
+        history = CommandHistory()
+
+        # Add multiple executions with same command
+        for i in range(3):
+            execution = CommandExecution(
+                id=f"cmd-{i}",
+                command="git status",
+                worktree_path="/tmp/test",
+                start_time=datetime.now(),
+            )
+            history.add_execution(execution)
+
+        # Add different command
+        other_execution = CommandExecution(
+            id="other-cmd",
+            command="git log",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        history.add_execution(other_execution)
+
+        status_executions = history.get_executions_by_command("git status")
+        assert len(status_executions) == 3
+
+        log_executions = history.get_executions_by_command("git log")
+        assert len(log_executions) == 1
+
+    def test_get_successful_and_failed_executions(self):
+        """Test getting successful and failed executions."""
+        history = CommandHistory()
+
+        # Add successful execution
+        success_exec = CommandExecution(
+            id="success-cmd",
+            command="echo success",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        success_exec.mark_completed(exit_code=0)
+
+        # Add failed execution
+        failed_exec = CommandExecution(
+            id="failed-cmd",
+            command="false",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        failed_exec.mark_completed(exit_code=1)
+
+        history.add_execution(success_exec)
+        history.add_execution(failed_exec)
+
+        successful = history.get_successful_executions()
+        assert len(successful) == 1
+        assert successful[0] == success_exec
+
+        failed = history.get_failed_executions()
+        assert len(failed) == 1
+        assert failed[0] == failed_exec
+
+    def test_remove_execution(self):
+        """Test removing execution from history."""
+        history = CommandHistory()
+
+        execution = CommandExecution(
+            id="test-cmd",
+            command="git status",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        history.add_execution(execution)
+
+        assert len(history) == 1
+
+        # Remove existing execution
+        removed = history.remove_execution("test-cmd")
+        assert removed is True
+        assert len(history) == 0
+
+        # Try to remove non-existent execution
+        removed = history.remove_execution("non-existent")
+        assert removed is False
+
+    def test_clear_history(self):
+        """Test clearing history."""
+        history = CommandHistory()
+
+        # Add some executions
+        for i in range(5):
+            execution = CommandExecution(
+                id=f"cmd-{i}",
+                command=f"echo {i}",
+                worktree_path="/tmp/test",
+                start_time=datetime.now(),
+            )
+            history.add_execution(execution)
+
+        assert len(history) == 5
+
+        history.clear_history()
+        assert len(history) == 0
+
+    def test_get_statistics(self):
+        """Test getting history statistics."""
+        history = CommandHistory()
+
+        # Empty history
+        stats = history.get_statistics()
+        assert stats["total_executions"] == 0
+        assert stats["successful"] == 0
+        assert stats["failed"] == 0
+
+        # Add various executions
+        success_exec = CommandExecution(
+            id="success",
+            command="echo success",
+            worktree_path="/tmp/test",
+            start_time=datetime.now() - timedelta(seconds=2),
+        )
+        success_exec.mark_completed(exit_code=0)
+
+        failed_exec = CommandExecution(
+            id="failed",
+            command="false",
+            worktree_path="/tmp/test",
+            start_time=datetime.now() - timedelta(seconds=1),
+        )
+        failed_exec.mark_completed(exit_code=1)
+
+        running_exec = CommandExecution(
+            id="running",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        running_exec.mark_started()
+
+        history.add_execution(success_exec)
+        history.add_execution(failed_exec)
+        history.add_execution(running_exec)
+
+        stats = history.get_statistics()
+        assert stats["total_executions"] == 3
+        assert stats["successful"] == 1
+        assert stats["failed"] == 1
+        assert stats["running"] == 1
+        assert stats["average_duration"] is not None
+
+    def test_serialization(self):
+        """Test command history serialization and deserialization."""
+        original = CommandHistory(
+            worktree_path="/tmp/test-worktree", max_history_size=50
+        )
+
+        # Add some executions
+        execution = CommandExecution(
+            id="test-cmd",
+            command="git status",
+            worktree_path="/tmp/test-worktree",
+            start_time=datetime.now(),
+        )
+        original.add_execution(execution)
+
+        # Test dict serialization
+        data = original.to_dict()
+        restored = CommandHistory.from_dict(data)
+
+        assert restored.worktree_path == original.worktree_path
+        assert restored.max_history_size == original.max_history_size
+        assert len(restored.executions) == len(original.executions)
+        assert restored.executions[0] == original.executions[0]
