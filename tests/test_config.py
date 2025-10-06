@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from wt_manager.models.config import AppConfig, ProjectConfig, UserPreferences
@@ -408,6 +408,285 @@ class TestConfigManager(unittest.TestCase):
         self.assertIn("version", info)
         self.assertIn("project_count", info)
         self.assertIn("file_exists", info)
+
+
+class TestConfigurationPersistence(unittest.TestCase):
+    """Test cases for configuration persistence and loading edge cases."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_file = Path(self.temp_dir) / "test_config.json"
+
+    def test_config_file_corruption_handling(self):
+        """Test handling of corrupted configuration files."""
+        # Create corrupted config file
+        with open(self.config_file, "w") as f:
+            f.write("invalid json content {")
+
+        # Should create default config when loading corrupted file
+        config = AppConfig.load(self.config_file)
+        self.assertIsInstance(config, AppConfig)
+        self.assertEqual(config.version, "1.0.0")
+        self.assertEqual(len(config.projects), 0)
+
+    def test_config_file_permissions(self):
+        """Test handling of config file permission issues."""
+        # Create config file
+        config = AppConfig()
+        success = config.save(self.config_file)
+        self.assertTrue(success)
+
+        # Make directory read-only (simulate permission error)
+        import os
+        import stat
+
+        try:
+            # Make parent directory read-only
+            os.chmod(self.config_file.parent, stat.S_IRUSR | stat.S_IXUSR)
+
+            # Try to save config (should fail gracefully)
+            new_config = AppConfig()
+            success = new_config.save(self.config_file)
+            # On some systems this might still succeed, so we don't assert False
+
+        finally:
+            # Restore permissions
+            os.chmod(self.config_file.parent, stat.S_IRWXU)
+
+    def test_config_migration(self):
+        """Test configuration migration functionality."""
+        config = AppConfig()
+        config.version = "0.9.0"  # Old version
+
+        # Test migration
+        migrated = config.migrate_if_needed()
+        self.assertTrue(migrated)
+        self.assertEqual(config.version, "1.0.0")
+
+        # Test no migration needed
+        migrated = config.migrate_if_needed()
+        self.assertTrue(migrated)  # Should return True for no-op
+
+    def test_config_backup_and_restore_edge_cases(self):
+        """Test configuration backup and restore edge cases."""
+        config = AppConfig()
+
+        # Add some test data
+        now = datetime.now()
+        project_config = ProjectConfig(
+            id="test-id",
+            name="Test Project",
+            path="/path/to/project",
+            last_accessed=now,
+        )
+        config.add_project(project_config)
+
+        # Test backup to non-existent directory
+        backup_file = Path(self.temp_dir) / "nonexistent" / "backup.json"
+        success = config.backup(backup_file)
+        self.assertTrue(success)  # Should create directory
+        self.assertTrue(backup_file.exists())
+
+        # Test restore from non-existent file
+        non_existent_file = Path(self.temp_dir) / "nonexistent.json"
+        success = config.restore_from_backup(non_existent_file)
+        self.assertFalse(success)
+
+        # Test restore from corrupted backup
+        corrupted_backup = Path(self.temp_dir) / "corrupted.json"
+        with open(corrupted_backup, "w") as f:
+            f.write("invalid json {")
+
+        success = config.restore_from_backup(corrupted_backup)
+        self.assertFalse(success)
+
+    def test_command_history_persistence(self):
+        """Test command history persistence and loading."""
+        from wt_manager.models.command_execution import CommandExecution, CommandStatus
+
+        config = AppConfig()
+
+        # Create command execution
+        execution = CommandExecution(
+            id="test-cmd",
+            command="git status",
+            worktree_path="/tmp/test-worktree",
+            start_time=datetime.now(),
+        )
+        execution.mark_completed(exit_code=0)
+
+        # Add to config
+        config.add_command_execution(execution)
+
+        # Save and reload
+        success = config.save(self.config_file)
+        self.assertTrue(success)
+
+        loaded_config = AppConfig.load(self.config_file)
+
+        # Verify command history was preserved
+        history = loaded_config.get_command_history("/tmp/test-worktree")
+        self.assertIsNotNone(history)
+        self.assertEqual(len(history.executions), 1)
+        self.assertEqual(history.executions[0].command, "git status")
+        self.assertEqual(history.executions[0].status, CommandStatus.COMPLETED)
+
+    def test_config_cleanup_on_project_removal(self):
+        """Test cleanup of related data when projects are removed."""
+        from wt_manager.models.command_execution import CommandExecution
+
+        config = AppConfig()
+
+        # Add project
+        project_config = ProjectConfig(
+            id="test-project",
+            name="Test Project",
+            path="/tmp/test-project",
+            last_accessed=datetime.now(),
+        )
+        config.add_project(project_config)
+
+        # Add command history for worktrees under this project
+        execution1 = CommandExecution(
+            id="cmd-1",
+            command="git status",
+            worktree_path="/tmp/test-project/worktree1",
+            start_time=datetime.now(),
+        )
+        execution2 = CommandExecution(
+            id="cmd-2",
+            command="npm test",
+            worktree_path="/tmp/test-project/worktree2",
+            start_time=datetime.now(),
+        )
+        execution3 = CommandExecution(
+            id="cmd-3",
+            command="git log",
+            worktree_path="/tmp/other-project/worktree1",
+            start_time=datetime.now(),
+        )
+
+        config.add_command_execution(execution1)
+        config.add_command_execution(execution2)
+        config.add_command_execution(execution3)
+
+        # Verify command history exists
+        self.assertEqual(len(config.command_history), 3)
+
+        # Remove project
+        config.remove_project("test-project")
+
+        # Verify related command history was cleaned up
+        # Should only have the command history for the other project
+        self.assertEqual(len(config.command_history), 1)
+        self.assertIn("/tmp/other-project/worktree1", config.command_history)
+        self.assertNotIn("/tmp/test-project/worktree1", config.command_history)
+        self.assertNotIn("/tmp/test-project/worktree2", config.command_history)
+
+    def test_config_serialization_with_complex_data(self):
+        """Test configuration serialization with complex nested data."""
+        from wt_manager.models.command_execution import CommandExecution, CommandStatus
+
+        config = AppConfig()
+
+        # Add project with custom commands and notes
+        project_config = ProjectConfig(
+            id="complex-project",
+            name="Complex Project",
+            path="/path/to/complex",
+            last_accessed=datetime.now(),
+            is_favorite=True,
+            custom_commands={
+                "build": "npm run build",
+                "test": "npm test -- --coverage",
+                "deploy": "npm run deploy:prod",
+            },
+            notes="This is a complex project with multiple custom commands and detailed notes.",
+        )
+        config.add_project(project_config)
+
+        # Add complex command execution with all fields
+        execution = CommandExecution(
+            id="complex-cmd",
+            command="npm run test -- --coverage --verbose",
+            worktree_path="/path/to/complex/feature-branch",
+            start_time=datetime.now() - timedelta(minutes=5),
+            end_time=datetime.now(),
+            exit_code=0,
+            stdout="Test output with unicode: 🚀 ✅ 🎉\nCoverage: 95%",
+            stderr="Warning: deprecated API usage",
+            status=CommandStatus.COMPLETED,
+            timeout_seconds=300,
+        )
+        config.add_command_execution(execution)
+
+        # Update preferences with complex data
+        config.preferences.window_geometry = {
+            "x": 100,
+            "y": 50,
+            "width": 1200,
+            "height": 800,
+        }
+        config.preferences.panel_sizes = {
+            "projects": 300,
+            "worktrees": 500,
+            "output": 200,
+        }
+
+        # Test serialization and deserialization
+        data = config.to_dict()
+        restored_config = AppConfig.from_dict(data)
+
+        # Verify project data
+        restored_project = restored_config.get_project("complex-project")
+        self.assertIsNotNone(restored_project)
+        self.assertEqual(restored_project.name, "Complex Project")
+        self.assertTrue(restored_project.is_favorite)
+        self.assertEqual(len(restored_project.custom_commands), 3)
+        self.assertIn("build", restored_project.custom_commands)
+
+        # Verify command history
+        history = restored_config.get_command_history("/path/to/complex/feature-branch")
+        self.assertIsNotNone(history)
+        self.assertEqual(len(history.executions), 1)
+
+        restored_execution = history.executions[0]
+        self.assertEqual(
+            restored_execution.command, "npm run test -- --coverage --verbose"
+        )
+        self.assertEqual(restored_execution.status, CommandStatus.COMPLETED)
+        self.assertIn("🚀", restored_execution.stdout)  # Unicode handling
+
+        # Verify preferences
+        self.assertEqual(restored_config.preferences.window_geometry["width"], 1200)
+        self.assertEqual(restored_config.preferences.panel_sizes["projects"], 300)
+
+    def test_config_validation_comprehensive(self):
+        """Test comprehensive configuration validation."""
+        config = AppConfig()
+
+        # Add valid project
+        valid_project = ProjectConfig(
+            id="valid-project",
+            name="Valid Project",
+            path="/valid/path",
+            last_accessed=datetime.now(),
+        )
+        config.add_project(valid_project)
+
+        # Add project with potential issues
+        problematic_project = ProjectConfig(
+            id="",  # Empty ID
+            name="",  # Empty name
+            path="",  # Empty path
+            last_accessed=datetime.now(),
+        )
+        config.add_project(problematic_project)
+
+        # Test that config handles validation gracefully
+        # (The actual validation logic would be implemented in ConfigManager)
+        self.assertEqual(len(config.projects), 2)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 """Test cases for the data models."""
 
+import json
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-
+import pytest
 
 from wt_manager.models import (
     CommandExecution,
@@ -859,3 +860,444 @@ class TestCommandHistoryModel:
         assert restored.max_history_size == original.max_history_size
         assert len(restored.executions) == len(original.executions)
         assert restored.executions[0] == original.executions[0]
+
+
+class TestModelValidation:
+    """Test cases for model validation and edge cases."""
+
+    def test_worktree_invalid_data_handling(self):
+        """Test worktree handling of invalid data."""
+        # Test with empty commit hash
+        worktree = Worktree(
+            path="/tmp/test",
+            branch="main",
+            commit_hash="",
+        )
+        assert worktree.get_commit_short_hash() == ""
+
+        # Test with None last_modified (should set default)
+        worktree = Worktree(
+            path="/tmp/test",
+            branch="main",
+            commit_hash="abc123",
+            last_modified=None,
+        )
+        assert worktree.last_modified is not None
+        assert isinstance(worktree.last_modified, datetime)
+
+    def test_worktree_serialization_edge_cases(self):
+        """Test worktree serialization with edge cases."""
+        # Test with None last_modified in dict data
+        data = {
+            "path": "/tmp/test",
+            "branch": "main",
+            "commit_hash": "abc123",
+            "is_bare": False,
+            "is_detached": False,
+            "has_uncommitted_changes": False,
+            "last_modified": None,
+        }
+
+        # Should handle None gracefully and set default in __post_init__
+        restored = Worktree.from_dict(data)
+        assert restored.last_modified is not None
+        assert isinstance(restored.last_modified, datetime)
+
+        # Test serialization preserves the set datetime
+        restored_data = restored.to_dict()
+        assert restored_data["last_modified"] is not None
+
+        # Test JSON serialization with datetime values
+        json_str = restored.to_json()
+        from_json = Worktree.from_json(json_str)
+        assert from_json.last_modified is not None
+        assert isinstance(from_json.last_modified, datetime)
+
+    def test_worktree_invalid_json_handling(self):
+        """Test worktree handling of invalid JSON."""
+        with pytest.raises(json.JSONDecodeError):
+            Worktree.from_json("invalid json")
+
+        # Test with missing required fields
+        with pytest.raises(KeyError):
+            Worktree.from_dict({"path": "/tmp/test"})  # Missing branch and commit_hash
+
+    def test_project_validation_edge_cases(self):
+        """Test project validation with edge cases."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Test project with empty name
+            project = Project(
+                id="test-id",
+                name="",
+                path=temp_dir,
+                status=ProjectStatus.ACTIVE,
+                last_accessed=datetime.now(),
+            )
+            # Should use directory name as display name
+            assert project.get_display_name() == Path(temp_dir).name
+
+            # Test project with non-existent path
+            project = Project(
+                id="test-id",
+                name="Test",
+                path="/non/existent/path",
+                status=ProjectStatus.ACTIVE,
+                last_accessed=datetime.now(),
+            )
+            assert not project.is_valid()
+
+    def test_project_auto_id_generation(self):
+        """Test project automatic ID generation."""
+        project = Project(
+            id="",  # Empty ID should trigger auto-generation
+            name="Test Project",
+            path="/tmp/test",
+            status=ProjectStatus.ACTIVE,
+            last_accessed=datetime.now(),
+        )
+        assert project.id != ""
+        assert len(project.id) > 0
+
+    def test_project_serialization_edge_cases(self):
+        """Test project serialization with edge cases."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            Project(
+                id="test-id",
+                name="Test Project",
+                path=temp_dir,
+                status=ProjectStatus.ACTIVE,
+                last_accessed=datetime.now(),
+            )
+
+            # Test with invalid JSON
+            with pytest.raises(json.JSONDecodeError):
+                Project.from_json("invalid json")
+
+            # Test with missing required fields
+            with pytest.raises(KeyError):
+                Project.from_dict({"id": "test"})  # Missing required fields
+
+    def test_command_execution_validation(self):
+        """Test command execution validation and edge cases."""
+        # Test with empty ID (should auto-generate)
+        execution = CommandExecution(
+            id="",
+            command="test command",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        assert execution.id != ""
+        assert len(execution.id) > 0
+
+        # Test with None start_time (should set default)
+        execution = CommandExecution(
+            id="test-id",
+            command="test command",
+            worktree_path="/tmp/test",
+            start_time=None,
+        )
+        assert execution.start_time is not None
+        assert isinstance(execution.start_time, datetime)
+
+    def test_command_execution_state_transitions_initial_state(self):
+        """Test command execution initial state."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test initial state
+        assert execution.status == CommandStatus.PENDING
+        assert not execution.is_running()
+        assert not execution.is_finished()
+        assert not execution.is_successful()
+
+    def test_command_execution_state_transitions_to_running(self):
+        """Test command execution transition to running state."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test transition to running
+        execution.mark_started(process_id=12345)
+        assert execution.status == CommandStatus.RUNNING
+        assert execution.process_id == 12345
+        assert execution.is_running()
+        assert not execution.is_finished()
+
+    def test_command_execution_state_transitions_to_completed(self):
+        """Test command execution transition to completed state."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test transition to completed (success)
+        execution.mark_started(process_id=12345)
+        execution.mark_completed(exit_code=0)
+        assert execution.status == CommandStatus.COMPLETED
+        assert execution.exit_code == 0
+        assert execution.process_id is None
+        assert not execution.is_running()
+        assert execution.is_finished()
+        assert execution.is_successful()
+
+    def test_command_execution_state_transitions_to_failed(self):
+        """Test command execution transition to failed state."""
+        execution = CommandExecution(
+            id="test-cmd-2",
+            command="false",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        execution.mark_started()
+        execution.mark_completed(exit_code=1)
+        assert execution.status == CommandStatus.FAILED
+        assert not execution.is_successful()
+
+    def test_command_execution_state_transitions_to_cancelled(self):
+        """Test command execution transition to cancelled state."""
+        execution = CommandExecution(
+            id="test-cmd-3",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        execution.mark_started()
+        execution.mark_cancelled()
+        assert execution.status == CommandStatus.CANCELLED
+        assert execution.is_finished()
+        assert not execution.is_successful()
+
+    def test_command_execution_state_transitions_to_timeout(self):
+        """Test command execution transition to timeout state."""
+        execution = CommandExecution(
+            id="test-cmd-4",
+            command="sleep 100",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        execution.mark_started()
+        execution.mark_timeout()
+        assert execution.status == CommandStatus.TIMEOUT
+        assert execution.is_finished()
+        assert not execution.is_successful()
+
+    def test_command_execution_output_management(self):
+        """Test command execution output management."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test incremental output appending
+        execution.append_stdout("line 1\n")
+        execution.append_stdout("line 2\n")
+        execution.append_stderr("warning 1\n")
+        execution.append_stderr("warning 2\n")
+
+        assert execution.stdout == "line 1\nline 2\n"
+        assert execution.stderr == "warning 1\nwarning 2\n"
+
+        # Test formatted output with both stdout and stderr
+        formatted = execution.get_formatted_output()
+        assert "=== STDOUT ===" in formatted
+        assert "=== STDERR ===" in formatted
+        assert "line 1" in formatted
+        assert "warning 1" in formatted
+
+    def test_command_execution_timeout_edge_cases(self):
+        """Test command execution timeout edge cases."""
+        # Test timeout detection with no timeout set
+        execution = CommandExecution(
+            id="test-cmd",
+            command="sleep 10",
+            worktree_path="/tmp/test",
+            start_time=datetime.now() - timedelta(seconds=10),
+            timeout_seconds=None,
+        )
+        execution.status = CommandStatus.RUNNING
+        assert not execution.is_timed_out()
+
+        # Test timeout detection when not running
+        execution.timeout_seconds = 5
+        execution.status = CommandStatus.COMPLETED
+        assert not execution.is_timed_out()
+
+    def test_command_execution_serialization_edge_cases(self):
+        """Test command execution serialization edge cases."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+
+        # Test serialization with None end_time
+        data = execution.to_dict()
+        assert data["end_time"] is None
+
+        restored = CommandExecution.from_dict(data)
+        assert restored.end_time is None
+
+        # Test with invalid JSON
+        with pytest.raises(json.JSONDecodeError):
+            CommandExecution.from_json("invalid json")
+
+        # Test with missing required fields
+        with pytest.raises(KeyError):
+            CommandExecution.from_dict({"id": "test"})
+
+    def test_command_history_edge_cases(self):
+        """Test command history edge cases."""
+        # Test with None worktree_path (global history)
+        history = CommandHistory(worktree_path=None)
+        assert history.worktree_path is None
+
+        # Test statistics with empty history
+        stats = history.get_statistics()
+        assert stats["total_executions"] == 0
+        assert stats["average_duration"] is None
+
+        # Test with executions that have no duration
+        execution = CommandExecution(
+            id="test-cmd",
+            command="echo test",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        # Don't set end_time, so duration is None
+        history.add_execution(execution)
+
+        stats = history.get_statistics()
+        assert stats["total_executions"] == 1
+        assert stats["average_duration"] is None  # No finished executions
+
+    def test_worktree_string_representations(self):
+        """Test Worktree string representations."""
+        worktree = Worktree(
+            path="/tmp/test-worktree",
+            branch="feature-branch",
+            commit_hash="abc123def456",
+        )
+        str_repr = str(worktree)
+        assert "test-worktree" in str_repr
+        assert "feature-branch" in str_repr
+
+        repr_str = repr(worktree)
+        assert "Worktree" in repr_str
+        assert "/tmp/test-worktree" in repr_str
+
+    def test_project_string_representations(self):
+        """Test Project string representations."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a fake .git directory to make project valid
+            git_dir = Path(temp_dir) / ".git"
+            git_dir.mkdir()
+
+            project = Project(
+                id="test-id",
+                name="Test Project",
+                path=temp_dir,
+                status=ProjectStatus.ACTIVE,
+                last_accessed=datetime.now(),
+            )
+            str_repr = str(project)
+            assert "Test Project" in str_repr
+            assert "active" in str_repr
+
+            repr_str = repr(project)
+            assert "Project" in repr_str
+            assert "test-id" in repr_str
+
+    def test_command_execution_string_representations(self):
+        """Test CommandExecution string representations."""
+        execution = CommandExecution(
+            id="test-cmd",
+            command="git status --porcelain",
+            worktree_path="/tmp/test",
+            start_time=datetime.now(),
+        )
+        str_repr = str(execution)
+        assert "CommandExecution" in str_repr
+        assert "pending" in str_repr
+
+        repr_str = repr(execution)
+        assert "test-cmd" in repr_str
+        assert "git status --porcelain" in repr_str
+
+    def test_command_history_string_representations(self):
+        """Test CommandHistory string representations."""
+        history = CommandHistory(worktree_path="/tmp/test-worktree")
+        str_repr = str(history)
+        assert "CommandHistory" in str_repr
+        assert "test-worktree" in str_repr
+
+        repr_str = repr(history)
+        assert "/tmp/test-worktree" in repr_str
+
+    def test_model_hash_and_equality_edge_cases(self):
+        """Test model hash and equality edge cases."""
+        # Test Worktree equality with different attributes but same path
+        worktree1 = Worktree(
+            path="/tmp/test",
+            branch="main",
+            commit_hash="abc123",
+            has_uncommitted_changes=True,
+        )
+        worktree2 = Worktree(
+            path="/tmp/test",
+            branch="develop",
+            commit_hash="def456",
+            has_uncommitted_changes=False,
+        )
+        assert worktree1 == worktree2  # Same path
+        assert hash(worktree1) == hash(worktree2)
+
+        # Test Project equality with different attributes but same ID
+        project1 = Project(
+            id="same-id",
+            name="Project 1",
+            path="/tmp/proj1",
+            status=ProjectStatus.ACTIVE,
+            last_accessed=datetime.now(),
+        )
+        project2 = Project(
+            id="same-id",
+            name="Project 2",
+            path="/tmp/proj2",
+            status=ProjectStatus.INACTIVE,
+            last_accessed=datetime.now(),
+        )
+        assert project1 == project2  # Same ID
+        assert hash(project1) == hash(project2)
+
+        # Test CommandExecution equality with different attributes but same ID
+        execution1 = CommandExecution(
+            id="same-id",
+            command="echo 1",
+            worktree_path="/tmp/test1",
+            start_time=datetime.now(),
+        )
+        execution2 = CommandExecution(
+            id="same-id",
+            command="echo 2",
+            worktree_path="/tmp/test2",
+            start_time=datetime.now(),
+        )
+        assert execution1 == execution2  # Same ID
+        assert hash(execution1) == hash(execution2)
+
+        # Test inequality with different types
+        assert worktree1 != "not a worktree"
+        assert project1 != "not a project"
+        assert execution1 != "not an execution"
