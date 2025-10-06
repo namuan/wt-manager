@@ -5,6 +5,7 @@
 !src/
 !tests/
 !scripts/
+!.kiro/
 
 # Unignore files
 !.gitignore
