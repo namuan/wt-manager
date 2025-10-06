@@ -1,0 +1,21 @@
+# Ignore all root items
+/*
+# Unignore folders
+!assets/
+!src/
+!tests/
+!scripts/
+
+# Unignore files
+!.gitignore
+!README.md
+!pyproject.toml
+!uv.lock
+!Makefile
+!.pre-commit-config.yaml
+!main.spec
+!install.command
+
+# Python
+__pycache__/
+*.egg-info/

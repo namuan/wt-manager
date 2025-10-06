@@ -1,0 +1,36 @@
+[project]
+name = "wt-manager"
+version = "0.1.0"
+description = "WorkTree Manager"
+readme = "README.md"
+authors = [{ name = "Namuan", email = "namuan@deskriders.dev" }]
+requires-python = ">=3.12"
+
+dependencies = [
+    "pyqt6",
+]
+
+[project.urls]
+Homepage = "https://namuan.github.io/wt-manager/"
+Repository = "https://github.com/namuan/wt-manager"
+Documentation = "https://namuan.github.io/wt-manager/"
+
+
+[project.scripts]
+wt-manager = "wt_manager:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pre-commit",
+    "tox-uv",
+    "ruff",
+    "pyinstaller",
+    "radon",
+    "xenon",
+    "pytest-qt>=4.5.0",
+]
