@@ -10,7 +10,7 @@
 
 - [ ] 2. Implement core data models and validation
 
-  - [ ] 2.1 Create Project and Worktree data models
+  - [x] 2.1 Create Project and Worktree data models
 
     - Implement Project dataclass with validation methods
     - Implement Worktree dataclass with status and display methods
