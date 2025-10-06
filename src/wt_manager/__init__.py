@@ -1,15 +1,9 @@
-import sys
-from PyQt6.QtWidgets import QApplication, QWidget
+"""Git Worktree Manager - A PyQt6 application for managing Git worktrees."""
 
+from .app import main
 
-def main():
-    app = QApplication(sys.argv)
-    window = QWidget()
-    window.setWindowTitle("WorkTree Manager")
-    window.setGeometry(100, 100, 400, 300)
-    window.show()
-    sys.exit(app.exec())
+__version__ = "0.1.0"
+__author__ = "Namuan"
+__email__ = "namuan@deskriders.dev"
 
-
-if __name__ == "__main__":
-    main()
+__all__ = ["main"]
