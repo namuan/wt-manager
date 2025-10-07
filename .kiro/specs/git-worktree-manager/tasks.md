@@ -169,30 +169,30 @@
     - Test project list display and interaction
     - _Requirements: 1.1, 1.2, 1.4_
 
-- [ ] 9. Create worktree management UI components
+- [x] 9. Create worktree management UI components
 
-  - [ ] 9.1 Build WorktreePanel for worktree display
+  - [x] 9.1 Build WorktreePanel for worktree display
 
     - Create worktree list widget with branch and status information
     - Implement worktree selection and detail display
     - Add sorting and filtering capabilities for worktree list
     - _Requirements: 2.1, 2.2, 2.3, 10.4_
 
-  - [ ] 9.2 Add worktree context menu with operations
+  - [x] 9.2 Add worktree context menu with operations
 
     - Implement context menu with create/remove/open actions
     - Add "Run Command" option to context menu
     - Create external application integration (file manager, terminal, editor)
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 9.1_
 
-  - [ ] 9.3 Create worktree creation and removal dialogs
+  - [x] 9.3 Create worktree creation and removal dialogs
 
     - Build worktree creation dialog with path and branch selection
     - Implement worktree removal confirmation with safety checks
     - Add validation feedback and error handling
     - _Requirements: 3.1, 3.4, 4.1, 4.4, 7.2, 7.4_
 
-  - [ ] 9.4 Write UI tests for worktree management
+  - [x] 9.4 Write UI tests for worktree management
     - Test worktree creation and removal workflows
     - Test context menu operations and external integrations
     - Test worktree list display and filtering

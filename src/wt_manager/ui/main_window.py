@@ -8,20 +8,18 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QSplitter,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
     QFrame,
     QSizePolicy,
     QProgressBar,
     QTextEdit,
     QGroupBox,
-    QMenu,
 )
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QAction, QFont
 
 from .project_panel import ProjectPanel
+from .worktree_panel import WorktreePanel
 
 
 class MainWindow(QMainWindow):
@@ -29,12 +27,18 @@ class MainWindow(QMainWindow):
 
     # Signals for communication with services
     project_selected = pyqtSignal(str)  # project_id
-    worktree_selected = pyqtSignal(str, str)  # project_id, worktree_path
+    worktree_selected = pyqtSignal(str)  # worktree_path
     add_project_requested = pyqtSignal(str, str)  # path, name
     remove_project_requested = pyqtSignal(str)  # project_id
     refresh_requested = pyqtSignal()
     project_health_requested = pyqtSignal(str)  # project_id
-    command_execution_requested = pyqtSignal(str, str)  # worktree_path, command
+    create_worktree_requested = pyqtSignal(str, dict)  # project_id, config
+    remove_worktree_requested = pyqtSignal(
+        str, str, dict
+    )  # project_id, worktree_path, config
+    open_worktree_requested = pyqtSignal(str, str)  # worktree_path, action_type
+    run_command_requested = pyqtSignal(str)  # worktree_path
+    refresh_worktrees_requested = pyqtSignal(str)  # project_id
 
     def __init__(self):
         super().__init__()
@@ -84,7 +88,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.project_panel)
 
         # Create worktree panel
-        self.worktree_panel = self._create_worktree_panel()
+        self.worktree_panel = WorktreePanel()
         self.main_splitter.addWidget(self.worktree_panel)
 
         # Create command output panel (collapsible)
@@ -96,62 +100,6 @@ class MainWindow(QMainWindow):
         self.main_splitter.setSizes([350, 850])
         self.main_splitter.setStretchFactor(0, 0)  # Project panel fixed
         self.main_splitter.setStretchFactor(1, 1)  # Worktree panel stretches
-
-    def _create_worktree_panel(self) -> QWidget:
-        """Create the worktree management panel."""
-        panel = QWidget()
-
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(4)
-
-        # Worktrees header with actions
-        header_layout = QHBoxLayout()
-        header_label = QLabel("Worktrees")
-        header_label.setFont(QFont("", 12, QFont.Weight.Bold))
-        header_layout.addWidget(header_label)
-
-        self.project_name_label = QLabel("No project selected")
-        self.project_name_label.setStyleSheet("color: #666; font-style: italic;")
-        header_layout.addWidget(self.project_name_label)
-
-        header_layout.addStretch()
-
-        self.new_worktree_btn = QPushButton("New Worktree")
-        self.new_worktree_btn.setEnabled(False)
-        self.new_worktree_btn.setToolTip("Create a new worktree")
-        header_layout.addWidget(self.new_worktree_btn)
-
-        layout.addLayout(header_layout)
-
-        # Worktree list
-        self.worktree_list = QListWidget()
-        self.worktree_list.setAlternatingRowColors(True)
-        self.worktree_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.worktree_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        layout.addWidget(self.worktree_list)
-
-        # Worktree actions
-        actions_layout = QHBoxLayout()
-
-        self.open_worktree_btn = QPushButton("Open")
-        self.open_worktree_btn.setEnabled(False)
-        self.open_worktree_btn.setToolTip("Open worktree in file manager")
-        actions_layout.addWidget(self.open_worktree_btn)
-
-        self.run_command_btn = QPushButton("Run Command")
-        self.run_command_btn.setEnabled(False)
-        self.run_command_btn.setToolTip("Run command in worktree")
-        actions_layout.addWidget(self.run_command_btn)
-
-        self.remove_worktree_btn = QPushButton("Remove")
-        self.remove_worktree_btn.setEnabled(False)
-        self.remove_worktree_btn.setToolTip("Remove selected worktree")
-        actions_layout.addWidget(self.remove_worktree_btn)
-
-        layout.addLayout(actions_layout)
-
-        return panel
 
     def _create_command_panel(self) -> QWidget:
         """Create the collapsible command output panel."""
@@ -214,15 +162,21 @@ class MainWindow(QMainWindow):
         )
 
         # Worktree panel connections
-        self.new_worktree_btn.clicked.connect(self._on_new_worktree_clicked)
-        self.open_worktree_btn.clicked.connect(self._on_open_worktree_clicked)
-        self.run_command_btn.clicked.connect(self._on_run_command_clicked)
-        self.remove_worktree_btn.clicked.connect(self._on_remove_worktree_clicked)
-        self.worktree_list.itemSelectionChanged.connect(
-            self._on_worktree_selection_changed
+        self.worktree_panel.worktree_selected.connect(self._on_worktree_selected)
+        self.worktree_panel.create_worktree_requested.connect(
+            self._on_create_worktree_requested
         )
-        self.worktree_list.customContextMenuRequested.connect(
-            self._show_worktree_context_menu
+        self.worktree_panel.remove_worktree_requested.connect(
+            self._on_remove_worktree_requested
+        )
+        self.worktree_panel.open_worktree_requested.connect(
+            self._on_open_worktree_requested
+        )
+        self.worktree_panel.run_command_requested.connect(
+            self._on_run_command_requested
+        )
+        self.worktree_panel.refresh_worktrees_requested.connect(
+            self._on_refresh_worktrees_requested
         )
 
         # Command panel connections
@@ -233,10 +187,10 @@ class MainWindow(QMainWindow):
         self.add_project_action.triggered.connect(self._on_add_project_menu)
         self.remove_project_action.triggered.connect(self._on_remove_project_menu)
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
-        self.new_worktree_action.triggered.connect(self._on_new_worktree_clicked)
-        self.remove_worktree_action.triggered.connect(self._on_remove_worktree_clicked)
-        self.open_worktree_action.triggered.connect(self._on_open_worktree_clicked)
-        self.run_command_action.triggered.connect(self._on_run_command_clicked)
+        self.new_worktree_action.triggered.connect(self._on_new_worktree_menu)
+        self.remove_worktree_action.triggered.connect(self._on_remove_worktree_menu)
+        self.open_worktree_action.triggered.connect(self._on_open_worktree_menu)
+        self.run_command_action.triggered.connect(self._on_run_command_menu)
 
     def _setup_menu_bar(self) -> None:
         """Set up the menu bar."""
@@ -411,46 +365,23 @@ class MainWindow(QMainWindow):
 
         # Enable project-related actions
         self.remove_project_action.setEnabled(True)
-        self.new_worktree_btn.setEnabled(True)
         self.new_worktree_action.setEnabled(True)
-
-        # Update project name label - we'll need to get the project name
-        # This will be handled by the controller layer
-        self.project_name_label.setText("Project selected")
 
     def _on_project_deselected(self) -> None:
         """Handle project deselection."""
         self._current_project_id = None
         self.remove_project_action.setEnabled(False)
-        self.new_worktree_btn.setEnabled(False)
         self.new_worktree_action.setEnabled(False)
-        self.project_name_label.setText("No project selected")
 
-    def _on_worktree_selection_changed(self) -> None:
+    def _on_worktree_selected(self, worktree_path: str) -> None:
         """Handle worktree selection change."""
-        selected_items = self.worktree_list.selectedItems()
-        if selected_items and self._current_project_id:
-            item = selected_items[0]
-            worktree_path = item.data(Qt.ItemDataRole.UserRole)
-            if worktree_path:
-                self._current_worktree_path = worktree_path
-                self.worktree_selected.emit(self._current_project_id, worktree_path)
+        self._current_worktree_path = worktree_path
+        self.worktree_selected.emit(worktree_path)
 
-                # Enable worktree-related actions
-                self.open_worktree_btn.setEnabled(True)
-                self.run_command_btn.setEnabled(True)
-                self.remove_worktree_btn.setEnabled(True)
-                self.open_worktree_action.setEnabled(True)
-                self.run_command_action.setEnabled(True)
-                self.remove_worktree_action.setEnabled(True)
-        else:
-            self._current_worktree_path = None
-            self.open_worktree_btn.setEnabled(False)
-            self.run_command_btn.setEnabled(False)
-            self.remove_worktree_btn.setEnabled(False)
-            self.open_worktree_action.setEnabled(False)
-            self.run_command_action.setEnabled(False)
-            self.remove_worktree_action.setEnabled(False)
+        # Enable worktree-related actions
+        self.open_worktree_action.setEnabled(True)
+        self.run_command_action.setEnabled(True)
+        self.remove_worktree_action.setEnabled(True)
 
     def _on_add_project_menu(self) -> None:
         """Handle add project menu action."""
@@ -462,47 +393,50 @@ class MainWindow(QMainWindow):
         # Trigger the project panel's remove action
         self.project_panel._on_remove_project()
 
-    def _on_new_worktree_clicked(self) -> None:
-        """Handle new worktree button click."""
-        # This will be implemented when we create the worktree dialog
-        self.update_status("New worktree creation not yet implemented")
+    def _on_create_worktree_requested(self, project_id: str, config: dict) -> None:
+        """Handle create worktree request from worktree panel."""
+        self.create_worktree_requested.emit(project_id, config)
 
-    def _on_open_worktree_clicked(self) -> None:
-        """Handle open worktree button click."""
-        # This will be implemented when we add external application integration
-        self.update_status("Open worktree not yet implemented")
+    def _on_remove_worktree_requested(
+        self, project_id: str, worktree_path: str, config: dict
+    ) -> None:
+        """Handle remove worktree request from worktree panel."""
+        self.remove_worktree_requested.emit(project_id, worktree_path, config)
 
-    def _on_run_command_clicked(self) -> None:
-        """Handle run command button click."""
-        # This will be implemented when we create the command dialog
-        self.update_status("Run command not yet implemented")
+    def _on_open_worktree_requested(self, worktree_path: str, action_type: str) -> None:
+        """Handle open worktree request from worktree panel."""
+        self.open_worktree_requested.emit(worktree_path, action_type)
 
-    def _on_remove_worktree_clicked(self) -> None:
-        """Handle remove worktree button click."""
-        # This will be implemented when we add worktree removal
-        self.update_status("Remove worktree not yet implemented")
+    def _on_run_command_requested(self, worktree_path: str) -> None:
+        """Handle run command request from worktree panel."""
+        self.run_command_requested.emit(worktree_path)
 
-    def _show_worktree_context_menu(self, position) -> None:
-        """Show context menu for worktree list."""
-        item = self.worktree_list.itemAt(position)
-        if item and self._current_worktree_path:
-            menu = QMenu(self)
+    def _on_refresh_worktrees_requested(self, project_id: str) -> None:
+        """Handle refresh worktrees request from worktree panel."""
+        self.refresh_worktrees_requested.emit(project_id)
 
-            menu.addAction("Open in File Manager", self._on_open_worktree_clicked)
-            menu.addAction(
-                "Open in Terminal",
-                lambda: self.update_status("Open in terminal not yet implemented"),
+    # Menu action handlers
+    def _on_new_worktree_menu(self) -> None:
+        """Handle new worktree menu action."""
+        # Delegate to worktree panel to show dialog
+        self.worktree_panel._on_new_worktree()
+
+    def _on_remove_worktree_menu(self) -> None:
+        """Handle remove worktree menu action."""
+        # Delegate to worktree panel to show dialog
+        self.worktree_panel._on_remove_worktree()
+
+    def _on_open_worktree_menu(self) -> None:
+        """Handle open worktree menu action."""
+        if self._current_worktree_path:
+            self.open_worktree_requested.emit(
+                self._current_worktree_path, "file_manager"
             )
-            menu.addAction(
-                "Open in Editor",
-                lambda: self.update_status("Open in editor not yet implemented"),
-            )
-            menu.addSeparator()
-            menu.addAction("Run Command...", self._on_run_command_clicked)
-            menu.addSeparator()
-            menu.addAction("Remove Worktree", self._on_remove_worktree_clicked)
 
-            menu.exec(self.worktree_list.mapToGlobal(position))
+    def _on_run_command_menu(self) -> None:
+        """Handle run command menu action."""
+        if self._current_worktree_path:
+            self.run_command_requested.emit(self._current_worktree_path)
 
     def show_command_panel(self) -> None:
         """Show the command output panel."""
@@ -568,42 +502,13 @@ class MainWindow(QMainWindow):
         self.project_panel.populate_projects(projects)
         self.update_project_count(len(projects))
 
+    def set_current_project(self, project) -> None:
+        """Set the current project in the worktree panel."""
+        self.worktree_panel.set_project(project)
+
     def populate_worktrees(self, worktrees: list) -> None:
         """Populate the worktree list with worktree data."""
-        self.worktree_list.clear()
-
-        for worktree in worktrees:
-            item = QListWidgetItem()
-
-            # Set display text with branch and status
-            status_display = worktree.get_status_display()
-            branch_display = worktree.get_branch_display()
-
-            item.setText(
-                f"{worktree.get_directory_name()} ({branch_display}) - {status_display}"
-            )
-
-            # Store worktree path in item data
-            item.setData(Qt.ItemDataRole.UserRole, worktree.path)
-
-            # Set tooltip with worktree details
-            tooltip = (
-                f"Path: {worktree.path}\n"
-                f"Branch: {branch_display}\n"
-                f"Commit: {worktree.get_commit_short_hash()}\n"
-                f"Status: {status_display}\n"
-                f"Last Modified: {worktree.get_age_display()}"
-            )
-            item.setToolTip(tooltip)
-
-            # Set item color based on status
-            if worktree.has_uncommitted_changes:
-                item.setForeground(Qt.GlobalColor.blue)
-            elif worktree.is_detached:
-                item.setForeground(Qt.GlobalColor.darkYellow)
-
-            self.worktree_list.addItem(item)
-
+        self.worktree_panel.populate_worktrees(worktrees)
         self.update_worktree_count(len(worktrees))
 
     def append_command_output(self, text: str) -> None:
@@ -623,7 +528,7 @@ class MainWindow(QMainWindow):
 
     def clear_worktrees(self) -> None:
         """Clear the worktree list."""
-        self.worktree_list.clear()
+        self.worktree_panel.clear_worktrees()
         self.update_worktree_count(0)
 
     def clear_projects(self) -> None:
