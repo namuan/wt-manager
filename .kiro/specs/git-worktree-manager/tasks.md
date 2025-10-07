@@ -59,16 +59,16 @@
     - Test OS-specific path resolution
     - _Requirements: 7.1, 7.2, 9.8_
 
-- [ ] 4. Implement Git operations service
+- [x] 4. Implement Git operations service
 
-  - [ ] 4.1 Create GitService for Git command execution
+  - [x] 4.1 Create GitService for Git command execution
 
     - Implement Git command wrapper with error handling
     - Add methods for worktree listing, creation, and removal
     - Implement branch listing and remote fetching
     - _Requirements: 2.1, 3.1, 3.2, 4.1, 4.2_
 
-  - [ ] 4.2 Add asynchronous Git operations with QThread
+  - [x] 4.2 Add asynchronous Git operations with QThread
 
     - Create background worker threads for Git operations
     - Implement progress reporting and cancellation support
