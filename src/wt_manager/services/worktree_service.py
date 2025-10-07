@@ -118,7 +118,7 @@ class WorktreeService(WorktreeServiceInterface):
         """
         try:
             # Validate creation parameters
-            validation_result = self.validate_worktree_creation(path, branch)
+            validation_result = self.validate_worktree_creation(project, path, branch)
             if not validation_result.is_valid:
                 raise ValidationError(validation_result.message)
 
@@ -222,11 +222,14 @@ class WorktreeService(WorktreeServiceInterface):
         except Exception as e:
             raise ServiceError(f"Failed to remove worktree: {e}")
 
-    def validate_worktree_creation(self, path: str, branch: str) -> ValidationResult:
+    def validate_worktree_creation(
+        self, project: Project, path: str, branch: str
+    ) -> ValidationResult:
         """
         Validate parameters for worktree creation.
 
         Args:
+            project: Project to create worktree for
             path: Path where worktree should be created
             branch: Branch name for the worktree
 
@@ -243,6 +246,13 @@ class WorktreeService(WorktreeServiceInterface):
             branch_result = self._validation_service.validate_branch_name(branch)
             if not branch_result.is_valid:
                 return branch_result
+
+            # Check if branch is already in use by another worktree
+            branch_usage_result = self._validation_service.validate_branch_not_in_use(
+                branch, project.path, self._git_service
+            )
+            if not branch_usage_result.is_valid:
+                return branch_usage_result
 
             return ValidationResult(
                 is_valid=True,

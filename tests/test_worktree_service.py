@@ -271,6 +271,15 @@ class TestWorktreeService:
 
     def test_validate_worktree_creation(self):
         """Test worktree creation validation."""
+        # Setup project
+        project = Project(
+            id="test-id",
+            name="test-project",
+            path="/test/project",
+            status=ProjectStatus.ACTIVE,
+            last_accessed=datetime.now(),
+        )
+
         # Setup mocks
         self.mock_validation_service.validate_worktree_path.return_value = Mock(
             is_valid=True, message="Valid path"
@@ -278,9 +287,14 @@ class TestWorktreeService:
         self.mock_validation_service.validate_branch_name.return_value = Mock(
             is_valid=True, message="Valid branch"
         )
+        self.mock_validation_service.validate_branch_not_in_use.return_value = Mock(
+            is_valid=True, message="Branch available"
+        )
 
         # Test validation
-        result = self.service.validate_worktree_creation("/test/path", "branch-name")
+        result = self.service.validate_worktree_creation(
+            project, "/test/path", "branch-name"
+        )
 
         # Verify
         assert result.is_valid
@@ -289,6 +303,9 @@ class TestWorktreeService:
         )
         self.mock_validation_service.validate_branch_name.assert_called_once_with(
             "branch-name"
+        )
+        self.mock_validation_service.validate_branch_not_in_use.assert_called_once_with(
+            "branch-name", "/test/project", self.mock_git_service
         )
 
     def test_refresh_worktree(self):
@@ -487,7 +504,9 @@ class TestWorktreeServiceIntegration:
 
         # Test worktree validation
         worktree_path = str(Path(temp_dir) / "new_worktree")
-        validation_result = service.validate_worktree_creation(worktree_path, "feature")
+        validation_result = service.validate_worktree_creation(
+            project, worktree_path, "feature"
+        )
         assert validation_result.is_valid
 
         # Test creating a new worktree

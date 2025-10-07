@@ -369,6 +369,67 @@ class ValidationService(ValidationServiceInterface):
             details={"branch": branch},
         )
 
+    def validate_branch_not_in_use(
+        self, branch: str, repo_path: str, git_service
+    ) -> ValidationResult:
+        """
+        Validate that a branch is not already in use by existing worktrees.
+
+        Args:
+            branch: Branch name to check
+            repo_path: Path to the Git repository
+            git_service: Git service instance to get worktree information
+
+        Returns:
+            ValidationResult indicating if the branch is available for use
+        """
+        if not branch or not branch.strip():
+            return ValidationResult(
+                is_valid=False,
+                message="Branch name cannot be empty",
+                details={"error_type": "empty_branch"},
+            )
+
+        if not repo_path or not repo_path.strip():
+            return ValidationResult(
+                is_valid=False,
+                message="Repository path cannot be empty",
+                details={"error_type": "empty_repo_path"},
+            )
+
+        try:
+            # Get existing worktrees
+            worktrees = git_service.get_worktree_list(repo_path)
+
+            # Check if any worktree is using this branch
+            for worktree in worktrees:
+                worktree_branch = worktree.get("branch", "")
+                if worktree_branch == branch:
+                    worktree_path = worktree.get("path", "unknown")
+                    return ValidationResult(
+                        is_valid=False,
+                        message=f"Branch '{branch}' is already used by worktree at '{worktree_path}'",
+                        details={
+                            "error_type": "branch_in_use",
+                            "branch": branch,
+                            "worktree_path": worktree_path,
+                            "existing_worktrees": worktrees,
+                        },
+                    )
+
+            return ValidationResult(
+                is_valid=True,
+                message=f"Branch '{branch}' is available for use",
+                details={"branch": branch},
+            )
+
+        except Exception as e:
+            return ValidationResult(
+                is_valid=False,
+                message=f"Error checking branch usage: {str(e)}",
+                details={"error_type": "validation_exception", "exception": str(e)},
+            )
+
     def check_uncommitted_changes(self, worktree_path: str) -> ValidationResult:
         """
         Check if a worktree has uncommitted changes.
