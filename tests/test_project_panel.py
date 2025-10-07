@@ -418,17 +418,24 @@ class TestProjectPanel:
 
     def test_error_message_display(self, app):
         """Test error message display methods."""
+        from wt_manager.services.message_service import get_message_service
+        from unittest.mock import patch
+
         panel = ProjectPanel()
 
         # Test validation error
-        with patch("PyQt6.QtWidgets.QMessageBox.warning") as mock_warning:
+        with patch.object(get_message_service(), "show_error") as mock_show_error:
             panel.show_validation_error("Test validation error")
-            mock_warning.assert_called_once()
+            mock_show_error.assert_called_once_with(
+                "Validation Error", "Test validation error"
+            )
 
         # Test operation error
-        with patch("PyQt6.QtWidgets.QMessageBox.critical") as mock_critical:
+        with patch.object(get_message_service(), "show_error") as mock_show_error:
             panel.show_operation_error("Test Title", "Test operation error")
-            mock_critical.assert_called_once()
+            mock_show_error.assert_called_once_with(
+                "Test Title", "Test operation error"
+            )
 
     def test_open_in_file_manager(self, app, sample_projects):
         """Test opening project in file manager."""

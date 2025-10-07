@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QMessageBox
 
 from ..models.project import Project
 from ..models.worktree import Worktree
@@ -14,6 +13,7 @@ from ..services.command_service import CommandService
 from ..services.validation_service import ValidationService
 from ..services.config_manager import ConfigManager
 from ..services.git_service import GitService
+from ..services.message_service import get_message_service
 from ..ui.main_window import MainWindow
 from ..utils.exceptions import ServiceError, ValidationError, GitError
 from ..utils.error_handler import ErrorHandler
@@ -752,8 +752,7 @@ class ApplicationController(QObject):
     def _on_application_error(self, title: str, message: str) -> None:
         """Handle application error signal."""
         self.logger.error(f"Application error: {title} - {message}")
-        if self.main_window:
-            QMessageBox.critical(self.main_window, title, message)
+        get_message_service().show_error(title, message)
 
     # Public interface
     def show_main_window(self) -> None:

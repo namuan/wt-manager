@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QRadioButton,
@@ -30,6 +29,7 @@ from PyQt6.QtWidgets import (
 
 from ..models.project import Project
 from ..models.worktree import Worktree
+from ..services.message_service import get_message_service
 
 
 class CreateWorktreeDialog(QDialog):
@@ -1238,12 +1238,12 @@ class WorktreePanel(QWidget):
 
     def show_validation_error(self, message: str):
         """Show validation error message."""
-        QMessageBox.warning(self, "Validation Error", message)
+        get_message_service().show_error("Validation Error", message)
 
     def show_operation_error(self, title: str, message: str):
         """Show operation error message."""
-        QMessageBox.critical(self, title, message)
+        get_message_service().show_error(title, message)
 
     def show_operation_success(self, message: str):
         """Show operation success message."""
-        QMessageBox.information(self, "Success", message)
+        get_message_service().show_success(message)

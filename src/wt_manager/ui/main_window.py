@@ -19,6 +19,7 @@ from .project_panel import ProjectPanel
 from .worktree_panel import WorktreePanel
 from .command_dialog import CommandInputDialog
 from .command_output_widget import CommandOutputPanel
+from ..services.message_service import initialize_message_service
 
 
 class MainWindow(QMainWindow):
@@ -71,6 +72,9 @@ class MainWindow(QMainWindow):
         # Set up command service callbacks if available
         if self.command_service:
             self._setup_command_service_callbacks()
+
+        # Initialize message service with status bar interface
+        self.message_service = initialize_message_service(self, self)
 
         self.logger.info("Main window initialized")
 
@@ -466,6 +470,13 @@ class MainWindow(QMainWindow):
     def update_status(self, message: str, timeout: int = 3000) -> None:
         """Update the status bar message."""
         self.status_bar.showMessage(message, timeout)
+
+    def show_message(self, message: str, timeout: int = 3000) -> None:
+        """
+        StatusBarInterface implementation.
+        Show a message in the status bar.
+        """
+        self.update_status(message, timeout)
 
     def update_operation_status(self, status: str) -> None:
         """Update the operation status in the status bar."""

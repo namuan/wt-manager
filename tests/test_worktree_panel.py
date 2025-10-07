@@ -505,27 +505,30 @@ class TestWorktreePanelIntegration:
         with qtbot.waitSignal(panel.remove_worktree_requested, timeout=1000):
             QTest.mouseClick(panel.remove_btn, Qt.MouseButton.LeftButton)
 
-    @patch("wt_manager.ui.worktree_panel.QMessageBox.warning")
-    @patch("wt_manager.ui.worktree_panel.QMessageBox.critical")
-    @patch("wt_manager.ui.worktree_panel.QMessageBox.information")
-    def test_error_handling(
-        self, mock_info, mock_critical, mock_warning, qtbot, sample_project
-    ):
+    def test_error_handling(self, qtbot, sample_project):
         """Test error handling methods."""
+        from wt_manager.services.message_service import get_message_service
+        from unittest.mock import patch
+
         panel = WorktreePanel()
         qtbot.addWidget(panel)
 
-        # These should not raise exceptions and should call the appropriate message box methods
-        panel.show_validation_error("Test validation error")
-        mock_warning.assert_called_once_with(
-            panel, "Validation Error", "Test validation error"
-        )
+        # Test validation error
+        with patch.object(get_message_service(), "show_error") as mock_show_error:
+            panel.show_validation_error("Test validation error")
+            mock_show_error.assert_called_with(
+                "Validation Error", "Test validation error"
+            )
 
-        panel.show_operation_error("Test Error", "Test error message")
-        mock_critical.assert_called_once_with(panel, "Test Error", "Test error message")
+        # Test operation error
+        with patch.object(get_message_service(), "show_error") as mock_show_error:
+            panel.show_operation_error("Test Error", "Test error message")
+            mock_show_error.assert_called_with("Test Error", "Test error message")
 
-        panel.show_operation_success("Test success message")
-        mock_info.assert_called_once_with(panel, "Success", "Test success message")
+        # Test operation success
+        with patch.object(get_message_service(), "show_success") as mock_show_success:
+            panel.show_operation_success("Test success message")
+            mock_show_success.assert_called_with("Test success message")
 
     def test_filter_summary(self, qtbot, sample_project):
         """Test filter summary functionality."""

@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..models.project import Project, ProjectStatus
+from ..services.message_service import get_message_service
 
 
 class ProjectHealthDialog(QDialog):
@@ -486,19 +487,19 @@ class ProjectPanel(QWidget):
             return
 
         # Show confirmation dialog
-        reply = QMessageBox.question(
-            self,
+        reply = get_message_service().ask_question(
             "Remove Project",
             f"Are you sure you want to remove the project '{project.get_display_name()}'?\n\n"
             f"Path: {project.path}\n\n"
             "This will only remove the project from the manager, "
             "not delete any files from your system.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
         )
 
         if reply == QMessageBox.StandardButton.Yes:
             self.remove_project_requested.emit(self._current_project_id)
+            get_message_service().show_success(
+                f"Project '{project.get_display_name()}' removed successfully"
+            )
 
     def _on_selection_changed(self):
         """Handle project selection change."""
@@ -721,7 +722,7 @@ class ProjectPanel(QWidget):
         Args:
             message: Error message to display
         """
-        QMessageBox.warning(self, "Validation Error", message)
+        get_message_service().show_error("Validation Error", message)
 
     def show_operation_error(self, title: str, message: str):
         """
@@ -731,7 +732,7 @@ class ProjectPanel(QWidget):
             title: Error dialog title
             message: Error message to display
         """
-        QMessageBox.critical(self, title, message)
+        get_message_service().show_error(title, message)
 
     def show_operation_success(self, message: str):
         """
@@ -740,8 +741,7 @@ class ProjectPanel(QWidget):
         Args:
             message: Success message to display
         """
-        # For now, just log the success. Could be enhanced with status bar integration
-        self.logger.info(message)
+        get_message_service().show_success("Success", message)
 
     def show_project_health(self, project_id: str, health_data: dict):
         """
