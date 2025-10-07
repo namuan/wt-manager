@@ -81,23 +81,23 @@
     - Test asynchronous operation management
     - _Requirements: 3.1, 4.1, 5.2_
 
-- [ ] 5. Implement command execution service
+- [x] 5. Implement command execution service
 
-  - [ ] 5.1 Create CommandService for user command execution
+  - [x] 5.1 Create CommandService for user command execution
 
     - Implement command execution in worktree context
     - Add real-time stdout/stderr capture and streaming
     - Implement command cancellation and timeout handling
     - _Requirements: 9.1, 9.3, 9.4, 9.6_
 
-  - [ ] 5.2 Add command history and state management
+  - [x] 5.2 Add command history and state management
 
     - Implement command execution tracking and history
     - Add concurrent command execution support
     - Create command result formatting and display utilities
     - _Requirements: 9.5, 9.7, 9.8_
 
-  - [ ] 5.3 Write unit tests for command execution
+  - [x] 5.3 Write unit tests for command execution
     - Test command execution and output capture
     - Test concurrent command management
     - Test command validation and security
