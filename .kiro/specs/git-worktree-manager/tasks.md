@@ -103,16 +103,16 @@
     - Test command validation and security
     - _Requirements: 9.3, 9.6, 9.8_
 
-- [ ] 6. Create project and worktree management services
+- [x] 6. Create project and worktree management services
 
-  - [ ] 6.1 Implement ProjectService for project management
+  - [x] 6.1 Implement ProjectService for project management
 
     - Add project addition, removal, and validation
     - Implement project persistence and loading
     - Add project health checking and status updates
     - _Requirements: 1.1, 1.2, 1.4, 8.1, 8.2_
 
-  - [ ] 6.2 Implement WorktreeService for worktree operations
+  - [x] 6.2 Implement WorktreeService for worktree operations
 
     - Add worktree creation with branch management
     - Implement worktree removal with safety checks
