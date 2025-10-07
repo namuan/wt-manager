@@ -5,21 +5,20 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QSplitter,
     QLabel,
-    QPushButton,
     QFrame,
     QSizePolicy,
     QProgressBar,
-    QTextEdit,
     QGroupBox,
 )
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
-from PyQt6.QtGui import QAction, QFont
+from PyQt6.QtGui import QAction
 
 from .project_panel import ProjectPanel
 from .worktree_panel import WorktreePanel
+from .command_dialog import CommandInputDialog
+from .command_output_widget import CommandOutputPanel
 
 
 class MainWindow(QMainWindow):
@@ -40,10 +39,14 @@ class MainWindow(QMainWindow):
     run_command_requested = pyqtSignal(str)  # worktree_path
     refresh_worktrees_requested = pyqtSignal(str)  # project_id
 
-    def __init__(self):
+    def __init__(self, command_service=None, validation_service=None):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.settings = QSettings()
+
+        # Services
+        self.command_service = command_service
+        self.validation_service = validation_service
 
         # Current selections
         self._current_project_id = None
@@ -55,12 +58,19 @@ class MainWindow(QMainWindow):
         self.command_output = None
         self.progress_bar = None
 
+        # Active command executions
+        self._active_executions = {}
+
         self._setup_ui()
         self._setup_menu_bar()
         self._setup_toolbar()
         self._setup_status_bar()
         self._setup_connections()
         self._restore_state()
+
+        # Set up command service callbacks if available
+        if self.command_service:
+            self._setup_command_service_callbacks()
 
         self.logger.info("Main window initialized")
 
@@ -92,56 +102,23 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.worktree_panel)
 
         # Create command output panel (collapsible)
-        self.command_panel = self._create_command_panel()
-        self.command_panel.setVisible(False)  # Initially hidden
-        main_layout.addWidget(self.command_panel)
+        self.command_panel_group = QGroupBox("Command Output")
+        self.command_panel_group.setCheckable(True)
+        self.command_panel_group.setChecked(False)  # Ensure it starts unchecked
+        self.command_panel_group.setMaximumHeight(400)
+
+        command_panel_layout = QVBoxLayout(self.command_panel_group)
+        command_panel_layout.setContentsMargins(6, 6, 6, 6)
+
+        self.command_panel = CommandOutputPanel()
+        command_panel_layout.addWidget(self.command_panel)
+
+        main_layout.addWidget(self.command_panel_group)
 
         # Set initial splitter proportions (30% projects, 70% worktrees)
         self.main_splitter.setSizes([350, 850])
         self.main_splitter.setStretchFactor(0, 0)  # Project panel fixed
         self.main_splitter.setStretchFactor(1, 1)  # Worktree panel stretches
-
-    def _create_command_panel(self) -> QWidget:
-        """Create the collapsible command output panel."""
-        panel = QGroupBox("Command Output")
-        panel.setCheckable(True)
-        panel.setChecked(False)
-        panel.setMaximumHeight(300)
-
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(4)
-
-        # Command output display
-        self.command_output = QTextEdit()
-        self.command_output.setReadOnly(True)
-        self.command_output.setFont(QFont("Consolas, Monaco, monospace", 9))
-        self.command_output.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                border: 1px solid #3e3e3e;
-            }
-        """)
-        layout.addWidget(self.command_output)
-
-        # Command controls
-        controls_layout = QHBoxLayout()
-
-        self.clear_output_btn = QPushButton("Clear")
-        self.clear_output_btn.setMaximumWidth(60)
-        self.clear_output_btn.setToolTip("Clear command output")
-        controls_layout.addWidget(self.clear_output_btn)
-
-        controls_layout.addStretch()
-
-        self.command_status_label = QLabel("Ready")
-        self.command_status_label.setStyleSheet("color: #666;")
-        controls_layout.addWidget(self.command_status_label)
-
-        layout.addLayout(controls_layout)
-
-        return panel
 
     def _setup_connections(self) -> None:
         """Set up signal-slot connections."""
@@ -180,8 +157,8 @@ class MainWindow(QMainWindow):
         )
 
         # Command panel connections
-        self.clear_output_btn.clicked.connect(self.command_output.clear)
-        self.command_panel.toggled.connect(self._on_command_panel_toggled)
+        self.command_panel.cancel_command_requested.connect(self._cancel_single_command)
+        self.command_panel_group.toggled.connect(self._on_command_panel_toggled)
 
         # Menu action connections
         self.add_project_action.triggered.connect(self._on_add_project_menu)
@@ -347,7 +324,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_command_panel(self, checked: bool) -> None:
         """Toggle the command output panel visibility."""
-        self.command_panel.setChecked(checked)
+        self.command_panel_group.setChecked(checked)
         self.toggle_command_panel_action.setText(
             "Hide Command &Output" if checked else "Show Command &Output"
         )
@@ -409,7 +386,7 @@ class MainWindow(QMainWindow):
 
     def _on_run_command_requested(self, worktree_path: str) -> None:
         """Handle run command request from worktree panel."""
-        self.run_command_requested.emit(worktree_path)
+        self._show_command_dialog(worktree_path)
 
     def _on_refresh_worktrees_requested(self, project_id: str) -> None:
         """Handle refresh worktrees request from worktree panel."""
@@ -436,19 +413,19 @@ class MainWindow(QMainWindow):
     def _on_run_command_menu(self) -> None:
         """Handle run command menu action."""
         if self._current_worktree_path:
-            self.run_command_requested.emit(self._current_worktree_path)
+            self._show_command_dialog(self._current_worktree_path)
 
     def show_command_panel(self) -> None:
         """Show the command output panel."""
-        if not self.command_panel.isChecked():
-            self.command_panel.setChecked(True)
+        if not self.command_panel_group.isChecked():
+            self.command_panel_group.setChecked(True)
             self.toggle_command_panel_action.setChecked(True)
             self.toggle_command_panel_action.setText("Hide Command &Output")
 
     def hide_command_panel(self) -> None:
         """Hide the command output panel."""
-        if self.command_panel.isChecked():
-            self.command_panel.setChecked(False)
+        if self.command_panel_group.isChecked():
+            self.command_panel_group.setChecked(False)
             self.toggle_command_panel_action.setChecked(False)
             self.toggle_command_panel_action.setText("Show Command &Output")
 
@@ -511,21 +488,6 @@ class MainWindow(QMainWindow):
         self.worktree_panel.populate_worktrees(worktrees)
         self.update_worktree_count(len(worktrees))
 
-    def append_command_output(self, text: str) -> None:
-        """Append text to the command output panel."""
-        if not self.command_panel.isChecked():
-            self.show_command_panel()
-
-        self.command_output.append(text)
-
-        # Auto-scroll to bottom
-        scrollbar = self.command_output.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-
-    def set_command_status(self, status: str) -> None:
-        """Set the command status label."""
-        self.command_status_label.setText(status)
-
     def clear_worktrees(self) -> None:
         """Clear the worktree list."""
         self.worktree_panel.clear_worktrees()
@@ -566,11 +528,15 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("splitterSizes", self.main_splitter.sizes())
-        self.settings.setValue("commandPanelVisible", self.command_panel.isChecked())
+        self.settings.setValue(
+            "commandPanelVisible", self.command_panel_group.isChecked()
+        )
 
         # Save command panel height if visible
-        if self.command_panel.isChecked():
-            self.settings.setValue("commandPanelHeight", self.command_panel.height())
+        if self.command_panel_group.isChecked():
+            self.settings.setValue(
+                "commandPanelHeight", self.command_panel_group.height()
+            )
 
         self.logger.debug("Window state saved")
 
@@ -597,13 +563,152 @@ class MainWindow(QMainWindow):
             self.show_command_panel()
 
             # Restore command panel height
-            panel_height = self.settings.value("commandPanelHeight", 200, type=int)
-            self.command_panel.setMaximumHeight(panel_height)
+            panel_height = self.settings.value("commandPanelHeight", 300, type=int)
+            self.command_panel_group.setMaximumHeight(panel_height)
 
         self.logger.debug("Window state restored")
 
+    def _setup_command_service_callbacks(self) -> None:
+        """Set up command service callbacks for UI updates."""
+        if not self.command_service:
+            return
+
+        self.command_service.on_command_started = self._on_command_started
+        self.command_service.on_command_finished = self._on_command_finished
+        self.command_service.on_command_output = self._on_command_output
+        self.command_service.on_command_error = self._on_command_error
+
+    def _show_command_dialog(self, worktree_path: str) -> None:
+        """Show the command input dialog for the specified worktree."""
+        try:
+            # Get command history for this worktree
+            command_history = []
+            if self.command_service:
+                history = self.command_service.get_command_history(
+                    worktree_path, limit=20
+                )
+                command_history = [exec.command for exec in history]
+
+            # Create and show dialog
+            dialog = CommandInputDialog(
+                worktree_path=worktree_path,
+                command_history=command_history,
+                validation_service=self.validation_service,
+                parent=self,
+            )
+
+            # Connect dialog signals
+            dialog.command_execution_requested.connect(self._execute_command)
+
+            # Show dialog
+            dialog.exec()
+
+        except Exception as e:
+            self.logger.error(f"Error showing command dialog: {e}")
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(self, "Error", f"Failed to show command dialog:\n{e}")
+
+    def _execute_command(self, command: str, worktree_path: str, timeout: int) -> None:
+        """Execute a command in the specified worktree."""
+        if not self.command_service:
+            self.logger.error("No command service available")
+            return
+
+        try:
+            # Show command panel
+            self.show_command_panel()
+
+            # Execute command
+            execution = self.command_service.execute_command(
+                command=command,
+                worktree_path=worktree_path,
+                timeout_seconds=timeout if timeout > 0 else None,
+            )
+
+            # Track execution
+            self._active_executions[execution.id] = execution
+
+            # Add execution to command panel
+            self.command_panel.add_execution(execution)
+
+            # Update status
+            self.command_panel.set_status(f"Running: {execution.get_command_display()}")
+            self.update_operation_status("Executing command...")
+
+            self.logger.info(f"Started command execution: {command} in {worktree_path}")
+
+        except Exception as e:
+            self.logger.error(f"Error executing command: {e}")
+            self.command_panel.set_status(f"Error: {e}")
+            self.update_operation_status("Ready")
+
+    def _on_command_started(self, execution_id: str) -> None:
+        """Handle command execution started."""
+        execution = self._active_executions.get(execution_id)
+        if execution:
+            self.command_panel.update_execution(execution)
+            self.command_panel.set_status(f"Running: {execution.get_command_display()}")
+
+    def _on_command_finished(self, execution_id: str) -> None:
+        """Handle command execution finished."""
+        execution = self._active_executions.pop(execution_id, None)
+        if execution:
+            self.command_panel.update_execution(execution)
+
+            if execution.is_successful():
+                self.command_panel.set_status("Completed successfully")
+            else:
+                status = execution.get_status_display()
+                self.command_panel.set_status(f"Failed: {status}")
+
+            self.update_operation_status("Ready")
+
+    def _on_command_output(self, execution_id: str, output: str) -> None:
+        """Handle command output received."""
+        # Remove trailing newline to avoid double spacing
+        output = output.rstrip("\n\r")
+        if output:
+            self.command_panel.append_output(execution_id, output, is_error=False)
+
+    def _on_command_error(self, execution_id: str, error: str) -> None:
+        """Handle command error output received."""
+        # Remove trailing newline to avoid double spacing
+        error = error.rstrip("\n\r")
+        if error:
+            self.command_panel.append_output(execution_id, error, is_error=True)
+
+    def cancel_running_commands(self) -> None:
+        """Cancel all running commands."""
+        if not self.command_service:
+            return
+
+        active_executions = list(self._active_executions.keys())
+        for execution_id in active_executions:
+            self.command_service.cancel_command(execution_id)
+
+        if active_executions:
+            self.command_panel.set_status("Cancelling commands...")
+            self.update_operation_status("Cancelling...")
+
+    def _cancel_single_command(self, execution_id: str) -> None:
+        """Cancel a single command execution."""
+        if not self.command_service:
+            return
+
+        if self.command_service.cancel_command(execution_id):
+            self.command_panel.set_status("Cancelling command...")
+            self.logger.info(f"Cancelled command execution: {execution_id}")
+
     def closeEvent(self, event) -> None:
         """Handle window close event."""
+        # Cancel any running commands
+        if self._active_executions:
+            self.cancel_running_commands()
+
+        # Clean up command panel
+        self.command_panel.cleanup()
+
         self.save_state()
         self.logger.info("Main window closing")
         event.accept()
