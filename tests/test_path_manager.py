@@ -284,9 +284,11 @@ class TestPathManager:
 
     def test_ensure_directories_success(self):
         """Test ensure_directories creates all required directories."""
-        with patch.object(PathManager, "get_config_dir") as mock_config, patch.object(
-            PathManager, "get_log_dir"
-        ) as mock_log, patch.object(PathManager, "get_cache_dir") as mock_cache:
+        with (
+            patch.object(PathManager, "get_config_dir") as mock_config,
+            patch.object(PathManager, "get_log_dir") as mock_log,
+            patch.object(PathManager, "get_cache_dir") as mock_cache,
+        ):
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
                 mock_config.return_value = temp_path / "config"

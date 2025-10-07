@@ -70,9 +70,10 @@ class TestWorktreeService:
         self.service.initialize()
 
         # Get worktrees
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "pathlib.Path.stat"
-        ) as mock_stat:
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.stat") as mock_stat,
+        ):
             mock_stat.return_value.st_mtime = datetime.now().timestamp()
             worktrees = self.service.get_worktrees(project)
 
@@ -122,9 +123,10 @@ class TestWorktreeService:
         self.service.initialize()
 
         # Create worktree
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "pathlib.Path.stat"
-        ) as mock_stat:
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.stat") as mock_stat,
+        ):
             mock_stat.return_value.st_mtime = datetime.now().timestamp()
             worktree = self.service.create_worktree(project, worktree_path, branch_name)
 
@@ -308,9 +310,10 @@ class TestWorktreeService:
         self.service.initialize()
 
         # Refresh worktree
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "pathlib.Path.stat"
-        ) as mock_stat:
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.stat") as mock_stat,
+        ):
             mock_stat.return_value.st_mtime = datetime.now().timestamp()
             refreshed_worktree = self.service.refresh_worktree(worktree)
 
@@ -384,9 +387,11 @@ class TestWorktreeService:
         self.service.initialize()
 
         # Get status
-        with patch.object(worktree, "exists", return_value=True), patch.object(
-            worktree, "is_accessible", return_value=True
-        ), patch.object(worktree, "is_current_directory", return_value=False):
+        with (
+            patch.object(worktree, "exists", return_value=True),
+            patch.object(worktree, "is_accessible", return_value=True),
+            patch.object(worktree, "is_current_directory", return_value=False),
+        ):
             status = self.service.get_worktree_status(worktree)
 
         # Verify

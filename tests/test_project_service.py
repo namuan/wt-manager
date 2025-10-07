@@ -56,8 +56,9 @@ class TestProjectService:
         self.service.initialize()
 
         # Mock path validation in Project model
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "pathlib.Path.is_dir", return_value=True
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
         ):
             # Add project
             project = self.service.add_project(test_path)
@@ -316,9 +317,11 @@ class TestProjectService:
         self.mock_git_service.get_worktree_list.return_value = []
         self.mock_git_service.check_uncommitted_changes.return_value = False
 
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "pathlib.Path.is_dir", return_value=True
-        ), patch("pathlib.Path.stat") as mock_stat:
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.stat") as mock_stat,
+        ):
             mock_stat.return_value.st_mode = 0o755  # Readable directory
 
             health_status = self.service.get_project_health_status(project_id)

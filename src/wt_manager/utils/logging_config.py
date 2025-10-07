@@ -190,3 +190,82 @@ def log_exception(
         message: Custom message to include with the exception
     """
     logger.exception(message)
+
+
+class StructuredErrorFormatter(logging.Formatter):
+    """Formatter for structured error logging with additional context."""
+
+    def format(self, record):
+        # Add structured error information if available
+        if hasattr(record, "error_details"):
+            # Format the base message
+            formatted = super().format(record)
+
+            # Add structured error details
+            error_details = record.error_details
+            if isinstance(error_details, dict):
+                details_lines = []
+                for key, value in error_details.items():
+                    if value is not None:
+                        details_lines.append(f"  {key}: {value}")
+
+                if details_lines:
+                    formatted += "\nError Details:\n" + "\n".join(details_lines)
+
+            # Add traceback if available
+            if hasattr(record, "traceback") and record.traceback:
+                formatted += f"\nTraceback:\n{record.traceback}"
+
+            return formatted
+
+        return super().format(record)
+
+
+def setup_error_logging() -> None:
+    """Set up specialized error logging with structured format."""
+    try:
+        log_dir = PathManager.get_log_dir()
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create error logger with structured formatter
+        error_logger = logging.getLogger("wt_manager.errors")
+
+        # Structured error log file
+        structured_error_file = log_dir / "structured_errors.log"
+        structured_handler = logging.handlers.RotatingFileHandler(
+            structured_error_file,
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,
+            encoding="utf-8",
+        )
+        structured_handler.setLevel(logging.ERROR)
+
+        # Use structured formatter
+        structured_formatter = StructuredErrorFormatter(
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        structured_handler.setFormatter(structured_formatter)
+
+        error_logger.addHandler(structured_handler)
+        error_logger.setLevel(logging.ERROR)
+        error_logger.propagate = False  # Don't propagate to avoid duplicate logs
+
+    except Exception as e:
+        # Fallback logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to set up structured error logging: {e}")
+
+
+def log_structured_error(
+    error_dict: dict, message: str = "Structured error occurred"
+) -> None:
+    """
+    Log a structured error with detailed information.
+
+    Args:
+        error_dict: Dictionary containing error details
+        message: Main error message
+    """
+    error_logger = logging.getLogger("wt_manager.errors")
+    error_logger.error(message, extra={"error_details": error_dict})
