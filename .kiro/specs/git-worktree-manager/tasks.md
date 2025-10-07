@@ -125,23 +125,23 @@
     - Test error handling across service boundaries
     - _Requirements: 1.1, 2.1, 4.1_
 
-- [ ] 7. Build main application window and layout
+- [x] 7. Build main application window and layout
 
-  - [ ] 7.1 Create MainWindow with dual-pane layout
+  - [x] 7.1 Create MainWindow with dual-pane layout
 
     - Implement main window with menu bar and toolbar
     - Create splitter layout for projects and worktrees panels
     - Add status bar with operation feedback
     - _Requirements: 10.1, 10.2_
 
-  - [ ] 7.2 Add command output panel with collapsible design
+  - [x] 7.2 Add command output panel with collapsible design
 
     - Create collapsible command output panel
     - Implement real-time output display with syntax highlighting
     - Add command execution controls and history navigation
     - _Requirements: 9.5, 9.8_
 
-  - [ ] 7.3 Implement window state persistence
+  - [x] 7.3 Implement window state persistence
     - Save and restore window geometry and panel sizes
     - Implement layout state management
     - Add keyboard shortcuts for common operations
