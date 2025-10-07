@@ -53,7 +53,7 @@
     - Create utility methods for path sanitization
     - _Requirements: 8.1, 8.4_
 
-  - [ ] 3.3 Write unit tests for validation services
+  - [x] 3.3 Write unit tests for validation services
     - Test repository and path validation logic
     - Test command safety validation
     - Test OS-specific path resolution
