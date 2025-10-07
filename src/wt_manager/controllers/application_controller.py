@@ -726,13 +726,20 @@ class ApplicationController(QObject):
     def _on_project_added(self, project: Project) -> None:
         """Handle project added signal."""
         if self.main_window:
-            self.main_window.refresh_project_item(project)
+            # Refresh the entire project list to show the new project
+            self.main_window.populate_projects(list(self._projects.values()))
+            self.logger.debug(
+                f"Project list refreshed after adding project: {project.name}"
+            )
 
     def _on_project_removed(self, project_id: str) -> None:
         """Handle project removed signal."""
         if self.main_window:
-            # Project panel will handle the removal through its own signals
-            pass
+            # Refresh the entire project list to remove the deleted project
+            self.main_window.populate_projects(list(self._projects.values()))
+            self.logger.debug(
+                f"Project list refreshed after removing project: {project_id}"
+            )
 
     def _on_project_updated(self, project: Project) -> None:
         """Handle project updated signal."""

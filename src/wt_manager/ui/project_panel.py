@@ -741,7 +741,7 @@ class ProjectPanel(QWidget):
         Args:
             message: Success message to display
         """
-        get_message_service().show_success("Success", message)
+        get_message_service().show_success(message)
 
     def show_project_health(self, project_id: str, health_data: dict):
         """
