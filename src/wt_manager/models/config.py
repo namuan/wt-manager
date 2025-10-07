@@ -35,6 +35,7 @@ class UserPreferences:
     """
 
     theme: str = "auto"
+    auto_refresh_enabled: bool = True
     auto_refresh_interval: int = 30
     show_hidden_files: bool = False
     default_editor: str = ""

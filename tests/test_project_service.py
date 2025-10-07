@@ -366,8 +366,14 @@ class TestProjectServiceIntegration:
                 ["git", "commit", "-m", "Initial commit"], cwd=repo_path, check=True
             )
 
-            # Test with real services
-            service = ProjectService()
+            # Create isolated config file for testing
+            config_file = Path(temp_dir) / "test_config.json"
+
+            # Test with real services but isolated configuration
+            from wt_manager.services.config_manager import ConfigManager
+
+            config_manager = ConfigManager(config_file=config_file)
+            service = ProjectService(config_manager=config_manager)
             service.initialize()
 
             # Test validation

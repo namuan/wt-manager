@@ -91,14 +91,23 @@ class MainWindow(QMainWindow):
 
         # Create splitter for dual-pane layout
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter.setAccessibleName("Main content splitter")
         main_layout.addWidget(self.main_splitter)
 
         # Create project panel
         self.project_panel = ProjectPanel()
+        self.project_panel.setAccessibleName("Projects panel")
+        self.project_panel.setToolTip(
+            "Manage Git projects - Add, remove, and select projects to work with"
+        )
         self.main_splitter.addWidget(self.project_panel)
 
         # Create worktree panel
         self.worktree_panel = WorktreePanel()
+        self.worktree_panel.setAccessibleName("Worktrees panel")
+        self.worktree_panel.setToolTip(
+            "Manage worktrees for the selected project - Create, remove, and open worktrees"
+        )
         self.main_splitter.addWidget(self.worktree_panel)
 
         # Create command output panel (collapsible)
@@ -106,6 +115,10 @@ class MainWindow(QMainWindow):
         self.command_panel_group.setCheckable(True)
         self.command_panel_group.setChecked(False)  # Ensure it starts unchecked
         self.command_panel_group.setMaximumHeight(400)
+        self.command_panel_group.setAccessibleName("Command output panel")
+        self.command_panel_group.setToolTip(
+            "View real-time output from commands executed in worktrees"
+        )
 
         command_panel_layout = QVBoxLayout(self.command_panel_group)
         command_panel_layout.setContentsMargins(6, 6, 6, 6)
@@ -119,6 +132,11 @@ class MainWindow(QMainWindow):
         self.main_splitter.setSizes([350, 850])
         self.main_splitter.setStretchFactor(0, 0)  # Project panel fixed
         self.main_splitter.setStretchFactor(1, 1)  # Worktree panel stretches
+
+        # Set up focus policy for better keyboard navigation
+        self.project_panel.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.worktree_panel.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.command_panel.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def _setup_connections(self) -> None:
         """Set up signal-slot connections."""
@@ -255,10 +273,13 @@ class MainWindow(QMainWindow):
 
         about_action = QAction("&About", self)
         about_action.setStatusTip("About Git Worktree Manager")
+        about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
 
         keyboard_shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        keyboard_shortcuts_action.setShortcut("F1")
         keyboard_shortcuts_action.setStatusTip("Show keyboard shortcuts")
+        keyboard_shortcuts_action.triggered.connect(self._show_keyboard_shortcuts)
         help_menu.addAction(keyboard_shortcuts_action)
 
     def _setup_toolbar(self) -> None:
@@ -267,19 +288,30 @@ class MainWindow(QMainWindow):
         toolbar.setObjectName("MainToolBar")
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toolbar.setAccessibleName("Main toolbar")
+        toolbar.setToolTip("Main application toolbar with common actions")
 
         # Add project action
+        self.add_project_action.setToolTip("Add a new Git project to manage (Ctrl+N)")
         toolbar.addAction(self.add_project_action)
 
         toolbar.addSeparator()
 
         # Refresh action
+        self.refresh_action.setToolTip("Refresh all projects and their worktrees (F5)")
         toolbar.addAction(self.refresh_action)
 
         toolbar.addSeparator()
 
         # Worktree actions
+        self.new_worktree_action.setToolTip(
+            "Create a new worktree for the selected project (Ctrl+W)"
+        )
         toolbar.addAction(self.new_worktree_action)
+
+        self.run_command_action.setToolTip(
+            "Run a command in the selected worktree (Ctrl+T)"
+        )
         toolbar.addAction(self.run_command_action)
 
         # Add stretch to push status to the right
@@ -291,6 +323,8 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setMaximumWidth(200)
+        self.progress_bar.setAccessibleName("Operation progress")
+        self.progress_bar.setToolTip("Shows progress of current operations")
         toolbar.addWidget(self.progress_bar)
 
     def _setup_status_bar(self) -> None:
@@ -699,6 +733,122 @@ class MainWindow(QMainWindow):
         if self.command_service.cancel_command(execution_id):
             self.command_panel.set_status("Cancelling command...")
             self.logger.info(f"Cancelled command execution: {execution_id}")
+
+    def _show_about_dialog(self) -> None:
+        """Show the about dialog."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        about_text = """
+        <h2>Git Worktree Manager</h2>
+        <p><b>Version:</b> 0.1.0</p>
+        <p><b>Description:</b> A modern PyQt6-based GUI application for managing Git worktrees across multiple projects.</p>
+        <p><b>Features:</b></p>
+        <ul>
+        <li>Multi-project management</li>
+        <li>Worktree operations (create, remove, manage)</li>
+        <li>Command execution with real-time output</li>
+        <li>Smart branch management</li>
+        <li>Safety features and validation</li>
+        </ul>
+        <p><b>Built with:</b> Python, PyQt6, Git</p>
+        """
+
+        QMessageBox.about(self, "About Git Worktree Manager", about_text)
+
+    def _show_keyboard_shortcuts(self) -> None:
+        """Show the keyboard shortcuts dialog."""
+        from PyQt6.QtWidgets import (
+            QDialog,
+            QVBoxLayout,
+            QLabel,
+            QDialogButtonBox,
+            QScrollArea,
+        )
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Keyboard Shortcuts")
+        dialog.setMinimumSize(500, 400)
+
+        layout = QVBoxLayout(dialog)
+
+        # Create scroll area for shortcuts
+        scroll_area = QScrollArea()
+        scroll_widget = QLabel()
+        scroll_widget.setWordWrap(True)
+
+        shortcuts_text = """
+        <h3>File Operations</h3>
+        <table>
+        <tr><td><b>Ctrl+N</b></td><td>Add new project</td></tr>
+        <tr><td><b>Ctrl+D</b></td><td>Remove selected project</td></tr>
+        <tr><td><b>F5</b></td><td>Refresh all projects</td></tr>
+        <tr><td><b>Ctrl+Q</b></td><td>Exit application</td></tr>
+        </table>
+
+        <h3>Worktree Operations</h3>
+        <table>
+        <tr><td><b>Ctrl+W</b></td><td>Create new worktree</td></tr>
+        <tr><td><b>Ctrl+R</b></td><td>Remove selected worktree</td></tr>
+        <tr><td><b>Ctrl+O</b></td><td>Open worktree in file manager</td></tr>
+        <tr><td><b>Ctrl+T</b></td><td>Run command in selected worktree</td></tr>
+        </table>
+
+        <h3>View Operations</h3>
+        <table>
+        <tr><td><b>Ctrl+Shift+O</b></td><td>Toggle command output panel</td></tr>
+        <tr><td><b>Escape</b></td><td>Cancel running command</td></tr>
+        </table>
+
+        <h3>Navigation</h3>
+        <table>
+        <tr><td><b>Tab</b></td><td>Navigate between panels</td></tr>
+        <tr><td><b>Up/Down</b></td><td>Navigate within lists</td></tr>
+        <tr><td><b>Enter</b></td><td>Activate selected item</td></tr>
+        </table>
+
+        <h3>Help</h3>
+        <table>
+        <tr><td><b>F1</b></td><td>Show this help dialog</td></tr>
+        </table>
+        """
+
+        scroll_widget.setText(shortcuts_text)
+        scroll_area.setWidget(scroll_widget)
+        layout.addWidget(scroll_area)
+
+        # Add OK button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+
+        dialog.exec()
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key press events for additional shortcuts."""
+        from PyQt6.QtCore import Qt
+
+        key = event.key()
+        modifiers = event.modifiers()
+
+        # Escape key cancels running commands
+        if key == Qt.Key.Key_Escape:
+            if self._active_executions:
+                self.cancel_running_commands()
+                event.accept()
+                return
+
+        # Ctrl+Shift+O toggles command panel
+        if (
+            modifiers
+            == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+            and key == Qt.Key.Key_O
+        ):
+            self._toggle_command_panel(not self.command_panel_group.isChecked())
+            event.accept()
+            return
+
+        # Pass to parent for default handling
+        super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
         """Handle window close event."""

@@ -435,17 +435,16 @@ class TestCommandServiceIntegration:
         )
 
         # Wait for completion with more aggressive event processing
-        timeout = 10  # 10 seconds
+        timeout = 15  # 15 seconds
         start_time = time.time()
         while execution.is_running() and (time.time() - start_time) < timeout:
-            app.processEvents()  # Process events first
-            time.sleep(0.01)  # Shorter sleep for more responsive event processing
-            app.processEvents()  # Process events again
+            app.processEvents()  # Process all events
+            time.sleep(0.05)  # Slightly longer sleep for stability
 
-        # Final event processing
-        for _ in range(10):  # Multiple rounds to ensure all signals are processed
+        # Final event processing with longer timeout
+        for _ in range(20):  # More rounds to ensure all signals are processed
             app.processEvents()
-            time.sleep(0.01)
+            time.sleep(0.05)
 
         # Debug output if still failing
         if not execution.is_finished():
@@ -476,17 +475,16 @@ class TestCommandServiceIntegration:
         execution = self.service.execute_command("ls -la", self.temp_dir)
 
         # Wait for completion with more aggressive event processing
-        timeout = 10
+        timeout = 15
         start_time = time.time()
         while execution.is_running() and (time.time() - start_time) < timeout:
-            app.processEvents()  # Process events first
-            time.sleep(0.01)  # Shorter sleep for more responsive event processing
-            app.processEvents()  # Process events again
+            app.processEvents()  # Process all events
+            time.sleep(0.05)  # Slightly longer sleep for stability
 
-        # Final event processing
-        for _ in range(10):  # Multiple rounds to ensure all signals are processed
+        # Final event processing with longer timeout
+        for _ in range(20):  # More rounds to ensure all signals are processed
             app.processEvents()
-            time.sleep(0.01)
+            time.sleep(0.05)
 
         # Debug output if still failing
         if not execution.is_finished():

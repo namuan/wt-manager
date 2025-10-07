@@ -45,10 +45,12 @@ context: clean-build ## Build context file from application sources
 	llm-context-builder.py --extensions .py --ignored_dirs build dist generated venv .venv .idea .aider.tags.cache.v3 --print_contents --temp_file
 
 package: clean ## Run installer
+	@echo "🚀 Building application package"
 	@uv run pyinstaller main.spec --clean
 
 install-macosx: package ## Installs application in users Application folder
-	./scripts/install-macosx.sh Whiteboard.app
+	@echo "🚀 Installing application on macOS"
+	./scripts/install-macosx.sh GitWorktreeManager.app
 
 setup: ## One command setup
 	@make install-macosx

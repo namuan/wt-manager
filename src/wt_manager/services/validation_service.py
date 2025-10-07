@@ -92,64 +92,20 @@ class ValidationService(ValidationServiceInterface):
         try:
             repo_path = Path(path).resolve()
 
-            # Check if path exists
-            if not repo_path.exists():
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Path does not exist: {path}",
-                    details={"error_type": "path_not_found", "path": str(repo_path)},
-                )
+            # Check basic path validity
+            path_result = self._validate_repository_path(repo_path, path)
+            if not path_result.is_valid:
+                return path_result
 
-            # Check if it's a directory
-            if not repo_path.is_dir():
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Path is not a directory: {path}",
-                    details={"error_type": "not_directory", "path": str(repo_path)},
-                )
-
-            # Check if it's a Git repository by looking for .git directory or file
-            git_path = repo_path / ".git"
-            if not git_path.exists():
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Not a Git repository: {path}",
-                    details={"error_type": "not_git_repo", "path": str(repo_path)},
-                )
+            # Check if it's a Git repository
+            git_result = self._validate_git_directory(repo_path, path)
+            if not git_result.is_valid:
+                return git_result
 
             # Verify with git command
-            try:
-                result = subprocess.run(
-                    ["git", "rev-parse", "--git-dir"],
-                    cwd=str(repo_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-
-                if result.returncode != 0:
-                    return ValidationResult(
-                        is_valid=False,
-                        message=f"Invalid Git repository: {path}",
-                        details={
-                            "error_type": "git_validation_failed",
-                            "path": str(repo_path),
-                            "git_error": result.stderr.strip(),
-                        },
-                    )
-
-            except subprocess.TimeoutExpired:
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Git validation timed out for: {path}",
-                    details={"error_type": "git_timeout", "path": str(repo_path)},
-                )
-            except FileNotFoundError:
-                return ValidationResult(
-                    is_valid=False,
-                    message="Git command not found. Please ensure Git is installed.",
-                    details={"error_type": "git_not_found"},
-                )
+            git_command_result = self._validate_with_git_command(repo_path, path)
+            if not git_command_result.is_valid:
+                return git_command_result
 
             return ValidationResult(
                 is_valid=True,
@@ -163,6 +119,81 @@ class ValidationService(ValidationServiceInterface):
                 message=f"Error validating repository: {str(e)}",
                 details={"error_type": "validation_exception", "exception": str(e)},
             )
+
+    def _validate_repository_path(
+        self, repo_path: Path, original_path: str
+    ) -> ValidationResult:
+        """Validate basic path requirements for a repository."""
+        # Check if path exists
+        if not repo_path.exists():
+            return ValidationResult(
+                is_valid=False,
+                message=f"Path does not exist: {original_path}",
+                details={"error_type": "path_not_found", "path": str(repo_path)},
+            )
+
+        # Check if it's a directory
+        if not repo_path.is_dir():
+            return ValidationResult(
+                is_valid=False,
+                message=f"Path is not a directory: {original_path}",
+                details={"error_type": "not_directory", "path": str(repo_path)},
+            )
+
+        return ValidationResult(is_valid=True, message="Path is valid")
+
+    def _validate_git_directory(
+        self, repo_path: Path, original_path: str
+    ) -> ValidationResult:
+        """Check if the directory contains a .git directory or file."""
+        git_path = repo_path / ".git"
+        if not git_path.exists():
+            return ValidationResult(
+                is_valid=False,
+                message=f"Not a Git repository: {original_path}",
+                details={"error_type": "not_git_repo", "path": str(repo_path)},
+            )
+
+        return ValidationResult(is_valid=True, message="Git directory found")
+
+    def _validate_with_git_command(
+        self, repo_path: Path, original_path: str
+    ) -> ValidationResult:
+        """Verify repository validity using git command."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-dir"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                return ValidationResult(
+                    is_valid=False,
+                    message=f"Invalid Git repository: {original_path}",
+                    details={
+                        "error_type": "git_validation_failed",
+                        "path": str(repo_path),
+                        "git_error": result.stderr.strip(),
+                    },
+                )
+
+        except subprocess.TimeoutExpired:
+            return ValidationResult(
+                is_valid=False,
+                message=f"Git validation timed out for: {original_path}",
+                details={"error_type": "git_timeout", "path": str(repo_path)},
+            )
+        except FileNotFoundError:
+            return ValidationResult(
+                is_valid=False,
+                message="Git command not found. Please ensure Git is installed.",
+                details={"error_type": "git_not_found"},
+            )
+
+        return ValidationResult(is_valid=True, message="Git command validation passed")
 
     def validate_worktree_path(self, path: str) -> ValidationResult:
         """
@@ -358,64 +389,79 @@ class ValidationService(ValidationServiceInterface):
         try:
             path = Path(worktree_path).resolve()
 
-            if not path.exists():
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Worktree path does not exist: {worktree_path}",
-                    details={"error_type": "path_not_found", "path": str(path)},
-                )
+            # Validate path exists
+            path_result = self._validate_worktree_path_exists(path, worktree_path)
+            if not path_result.is_valid:
+                return path_result
 
             # Check git status
-            try:
-                result = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=str(path),
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-
-                if result.returncode != 0:
-                    return ValidationResult(
-                        is_valid=False,
-                        message=f"Failed to check Git status: {result.stderr.strip()}",
-                        details={
-                            "error_type": "git_status_failed",
-                            "path": str(path),
-                            "git_error": result.stderr.strip(),
-                        },
-                    )
-
-                has_changes = bool(result.stdout.strip())
-
-                return ValidationResult(
-                    is_valid=True,
-                    message="Successfully checked for uncommitted changes",
-                    details={
-                        "path": str(path),
-                        "has_uncommitted_changes": has_changes,
-                        "changes": result.stdout.strip() if has_changes else "",
-                    },
-                )
-
-            except subprocess.TimeoutExpired:
-                return ValidationResult(
-                    is_valid=False,
-                    message=f"Git status check timed out for: {worktree_path}",
-                    details={"error_type": "git_timeout", "path": str(path)},
-                )
-            except FileNotFoundError:
-                return ValidationResult(
-                    is_valid=False,
-                    message="Git command not found. Please ensure Git is installed.",
-                    details={"error_type": "git_not_found"},
-                )
+            git_status_result = self._check_git_status(path, worktree_path)
+            return git_status_result
 
         except Exception as e:
             return ValidationResult(
                 is_valid=False,
                 message=f"Error checking uncommitted changes: {str(e)}",
                 details={"error_type": "validation_exception", "exception": str(e)},
+            )
+
+    def _validate_worktree_path_exists(
+        self, path: Path, original_path: str
+    ) -> ValidationResult:
+        """Validate that the worktree path exists."""
+        if not path.exists():
+            return ValidationResult(
+                is_valid=False,
+                message=f"Worktree path does not exist: {original_path}",
+                details={"error_type": "path_not_found", "path": str(path)},
+            )
+        return ValidationResult(is_valid=True, message="Path exists")
+
+    def _check_git_status(self, path: Path, original_path: str) -> ValidationResult:
+        """Check git status for uncommitted changes."""
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode != 0:
+                return ValidationResult(
+                    is_valid=False,
+                    message=f"Failed to check Git status: {result.stderr.strip()}",
+                    details={
+                        "error_type": "git_status_failed",
+                        "path": str(path),
+                        "git_error": result.stderr.strip(),
+                    },
+                )
+
+            has_changes = bool(result.stdout.strip())
+
+            return ValidationResult(
+                is_valid=True,
+                message="Successfully checked for uncommitted changes",
+                details={
+                    "path": str(path),
+                    "has_uncommitted_changes": has_changes,
+                    "changes": result.stdout.strip() if has_changes else "",
+                },
+            )
+
+        except subprocess.TimeoutExpired:
+            return ValidationResult(
+                is_valid=False,
+                message=f"Git status check timed out for: {original_path}",
+                details={"error_type": "git_timeout", "path": str(path)},
+            )
+        except FileNotFoundError:
+            return ValidationResult(
+                is_valid=False,
+                message="Git command not found. Please ensure Git is installed.",
+                details={"error_type": "git_not_found"},
             )
 
     def validate_command_safety(self, command: str) -> ValidationResult:

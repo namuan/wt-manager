@@ -4,7 +4,7 @@ import sys
 import logging
 from PyQt6.QtWidgets import QApplication
 
-from .ui.main_window import MainWindow
+from .controllers.application_controller import ApplicationController
 from .utils.logging_config import setup_logging
 
 
@@ -13,7 +13,7 @@ class GitWorktreeManagerApp:
 
     def __init__(self):
         self.app: QApplication | None = None
-        self.main_window: MainWindow | None = None
+        self.controller: ApplicationController | None = None
         self.logger = logging.getLogger(__name__)
 
     def initialize(self) -> None:
@@ -28,8 +28,9 @@ class GitWorktreeManagerApp:
         self.app.setApplicationVersion("0.1.0")
         self.app.setOrganizationName("GitWorktreeManager")
 
-        # Create main window
-        self.main_window = MainWindow()
+        # Create and initialize application controller
+        self.controller = ApplicationController()
+        self.controller.initialize()
 
         # Set up application-wide error handling
         self.app.aboutToQuit.connect(self._on_about_to_quit)
@@ -38,13 +39,13 @@ class GitWorktreeManagerApp:
 
     def run(self) -> int:
         """Run the application."""
-        if not self.app or not self.main_window:
+        if not self.app or not self.controller:
             raise RuntimeError("Application not initialized. Call initialize() first.")
 
         self.logger.info("Starting application")
 
         # Show main window
-        self.main_window.show()
+        self.controller.show_main_window()
 
         # Start event loop
         return self.app.exec()
@@ -53,8 +54,8 @@ class GitWorktreeManagerApp:
         """Handle application shutdown."""
         self.logger.info("Application shutting down")
 
-        if self.main_window:
-            self.main_window.save_state()
+        if self.controller:
+            self.controller.cleanup()
 
 
 def main() -> int:
