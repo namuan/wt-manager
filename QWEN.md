@@ -1,0 +1,1 @@
+/Users/nnn/workspace/wt-manager/.trae/rules/project_rules.md

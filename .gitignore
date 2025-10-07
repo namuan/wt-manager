@@ -6,6 +6,7 @@
 !tests/
 !scripts/
 !.kiro/
+!.trae/
 
 # Unignore files
 !.gitignore
@@ -16,6 +17,8 @@
 !.pre-commit-config.yaml
 !main.spec
 !install.command
+!GEMINI.md
+!QWEN.md
 
 # Python
 __pycache__/
