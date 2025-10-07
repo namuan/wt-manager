@@ -41,3 +41,9 @@ class ServiceError(GitWorktreeManagerError):
     """Exception for service layer errors."""
 
     pass
+
+
+class PathError(GitWorktreeManagerError):
+    """Exception for path-related errors."""
+
+    pass
