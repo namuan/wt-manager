@@ -21,6 +21,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QAction, QFont
 
+from .project_panel import ProjectPanel
+
 
 class MainWindow(QMainWindow):
     """Main application window with dual-pane layout."""
@@ -28,9 +30,10 @@ class MainWindow(QMainWindow):
     # Signals for communication with services
     project_selected = pyqtSignal(str)  # project_id
     worktree_selected = pyqtSignal(str, str)  # project_id, worktree_path
-    add_project_requested = pyqtSignal()
+    add_project_requested = pyqtSignal(str, str)  # path, name
     remove_project_requested = pyqtSignal(str)  # project_id
     refresh_requested = pyqtSignal()
+    project_health_requested = pyqtSignal(str)  # project_id
     command_execution_requested = pyqtSignal(str, str)  # worktree_path, command
 
     def __init__(self):
@@ -43,7 +46,7 @@ class MainWindow(QMainWindow):
         self._current_worktree_path = None
 
         # UI components
-        self.project_list = None
+        self.project_panel = None
         self.worktree_list = None
         self.command_output = None
         self.progress_bar = None
@@ -77,7 +80,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.main_splitter)
 
         # Create project panel
-        self.project_panel = self._create_project_panel()
+        self.project_panel = ProjectPanel()
         self.main_splitter.addWidget(self.project_panel)
 
         # Create worktree panel
@@ -93,53 +96,6 @@ class MainWindow(QMainWindow):
         self.main_splitter.setSizes([350, 850])
         self.main_splitter.setStretchFactor(0, 0)  # Project panel fixed
         self.main_splitter.setStretchFactor(1, 1)  # Worktree panel stretches
-
-    def _create_project_panel(self) -> QWidget:
-        """Create the project management panel."""
-        panel = QWidget()
-        panel.setMinimumWidth(300)
-        panel.setMaximumWidth(400)
-
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(4)
-
-        # Projects header with add button
-        header_layout = QHBoxLayout()
-        header_label = QLabel("Projects")
-        header_label.setFont(QFont("", 12, QFont.Weight.Bold))
-        header_layout.addWidget(header_label)
-
-        header_layout.addStretch()
-
-        self.add_project_btn = QPushButton("Add")
-        self.add_project_btn.setMaximumWidth(60)
-        self.add_project_btn.setToolTip("Add a new Git project")
-        header_layout.addWidget(self.add_project_btn)
-
-        layout.addLayout(header_layout)
-
-        # Project list
-        self.project_list = QListWidget()
-        self.project_list.setAlternatingRowColors(True)
-        self.project_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        layout.addWidget(self.project_list)
-
-        # Project actions
-        actions_layout = QHBoxLayout()
-
-        self.refresh_projects_btn = QPushButton("Refresh")
-        self.refresh_projects_btn.setToolTip("Refresh all projects")
-        actions_layout.addWidget(self.refresh_projects_btn)
-
-        self.remove_project_btn = QPushButton("Remove")
-        self.remove_project_btn.setEnabled(False)
-        self.remove_project_btn.setToolTip("Remove selected project")
-        actions_layout.addWidget(self.remove_project_btn)
-
-        layout.addLayout(actions_layout)
-
-        return panel
 
     def _create_worktree_panel(self) -> QWidget:
         """Create the worktree management panel."""
@@ -242,11 +198,19 @@ class MainWindow(QMainWindow):
     def _setup_connections(self) -> None:
         """Set up signal-slot connections."""
         # Project panel connections
-        self.add_project_btn.clicked.connect(self.add_project_requested.emit)
-        self.refresh_projects_btn.clicked.connect(self.refresh_requested.emit)
-        self.remove_project_btn.clicked.connect(self._on_remove_project_clicked)
-        self.project_list.itemSelectionChanged.connect(
-            self._on_project_selection_changed
+        self.project_panel.project_selected.connect(self._on_project_selected)
+        self.project_panel.project_selected.connect(self.project_selected.emit)
+        self.project_panel.add_project_requested.connect(
+            self.add_project_requested.emit
+        )
+        self.project_panel.remove_project_requested.connect(
+            self.remove_project_requested.emit
+        )
+        self.project_panel.refresh_projects_requested.connect(
+            self.refresh_requested.emit
+        )
+        self.project_panel.project_health_requested.connect(
+            self.project_health_requested.emit
         )
 
         # Worktree panel connections
@@ -266,8 +230,8 @@ class MainWindow(QMainWindow):
         self.command_panel.toggled.connect(self._on_command_panel_toggled)
 
         # Menu action connections
-        self.add_project_action.triggered.connect(self.add_project_requested.emit)
-        self.remove_project_action.triggered.connect(self._on_remove_project_clicked)
+        self.add_project_action.triggered.connect(self._on_add_project_menu)
+        self.remove_project_action.triggered.connect(self._on_remove_project_menu)
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.new_worktree_action.triggered.connect(self._on_new_worktree_clicked)
         self.remove_worktree_action.triggered.connect(self._on_remove_worktree_clicked)
@@ -441,31 +405,26 @@ class MainWindow(QMainWindow):
             "Hide Command &Output" if checked else "Show Command &Output"
         )
 
-    def _on_project_selection_changed(self) -> None:
+    def _on_project_selected(self, project_id: str) -> None:
         """Handle project selection change."""
-        selected_items = self.project_list.selectedItems()
-        if selected_items:
-            item = selected_items[0]
-            project_id = item.data(Qt.ItemDataRole.UserRole)
-            if project_id:
-                self._current_project_id = project_id
-                self.project_selected.emit(project_id)
+        self._current_project_id = project_id
 
-                # Enable project-related actions
-                self.remove_project_btn.setEnabled(True)
-                self.remove_project_action.setEnabled(True)
-                self.new_worktree_btn.setEnabled(True)
-                self.new_worktree_action.setEnabled(True)
+        # Enable project-related actions
+        self.remove_project_action.setEnabled(True)
+        self.new_worktree_btn.setEnabled(True)
+        self.new_worktree_action.setEnabled(True)
 
-                # Update project name label
-                self.project_name_label.setText(f"Project: {item.text()}")
-        else:
-            self._current_project_id = None
-            self.remove_project_btn.setEnabled(False)
-            self.remove_project_action.setEnabled(False)
-            self.new_worktree_btn.setEnabled(False)
-            self.new_worktree_action.setEnabled(False)
-            self.project_name_label.setText("No project selected")
+        # Update project name label - we'll need to get the project name
+        # This will be handled by the controller layer
+        self.project_name_label.setText("Project selected")
+
+    def _on_project_deselected(self) -> None:
+        """Handle project deselection."""
+        self._current_project_id = None
+        self.remove_project_action.setEnabled(False)
+        self.new_worktree_btn.setEnabled(False)
+        self.new_worktree_action.setEnabled(False)
+        self.project_name_label.setText("No project selected")
 
     def _on_worktree_selection_changed(self) -> None:
         """Handle worktree selection change."""
@@ -493,10 +452,15 @@ class MainWindow(QMainWindow):
             self.run_command_action.setEnabled(False)
             self.remove_worktree_action.setEnabled(False)
 
-    def _on_remove_project_clicked(self) -> None:
-        """Handle remove project button click."""
-        if self._current_project_id:
-            self.remove_project_requested.emit(self._current_project_id)
+    def _on_add_project_menu(self) -> None:
+        """Handle add project menu action."""
+        # Trigger the project panel's add dialog
+        self.project_panel._on_add_project()
+
+    def _on_remove_project_menu(self) -> None:
+        """Handle remove project menu action."""
+        # Trigger the project panel's remove action
+        self.project_panel._on_remove_project()
 
     def _on_new_worktree_clicked(self) -> None:
         """Handle new worktree button click."""
@@ -601,30 +565,7 @@ class MainWindow(QMainWindow):
 
     def populate_projects(self, projects: list) -> None:
         """Populate the project list with project data."""
-        self.project_list.clear()
-
-        for project in projects:
-            item = QListWidgetItem()
-
-            # Set display text with status indicator
-            status_icon = self._get_status_icon(project.status.value)
-            item.setText(f"{status_icon} {project.get_display_name()}")
-
-            # Store project ID in item data
-            item.setData(Qt.ItemDataRole.UserRole, project.id)
-
-            # Set tooltip with project details
-            tooltip = f"Path: {project.path}\nStatus: {project.status.value}\nWorktrees: {len(project.worktrees)}"
-            item.setToolTip(tooltip)
-
-            # Set item color based on status
-            if project.status.value == "error":
-                item.setForeground(Qt.GlobalColor.red)
-            elif project.status.value == "unavailable":
-                item.setForeground(Qt.GlobalColor.gray)
-
-            self.project_list.addItem(item)
-
+        self.project_panel.populate_projects(projects)
         self.update_project_count(len(projects))
 
     def populate_worktrees(self, worktrees: list) -> None:
@@ -684,6 +625,31 @@ class MainWindow(QMainWindow):
         """Clear the worktree list."""
         self.worktree_list.clear()
         self.update_worktree_count(0)
+
+    def clear_projects(self) -> None:
+        """Clear the project list."""
+        self.project_panel.clear_projects()
+        self.update_project_count(0)
+
+    def refresh_project_item(self, project) -> None:
+        """Refresh a specific project item."""
+        self.project_panel.refresh_project_item(project)
+
+    def show_project_validation_error(self, message: str) -> None:
+        """Show project validation error."""
+        self.project_panel.show_validation_error(message)
+
+    def show_project_operation_error(self, title: str, message: str) -> None:
+        """Show project operation error."""
+        self.project_panel.show_operation_error(title, message)
+
+    def show_project_operation_success(self, message: str) -> None:
+        """Show project operation success."""
+        self.project_panel.show_operation_success(message)
+
+    def show_project_health(self, project_id: str, health_data: dict) -> None:
+        """Show project health status dialog."""
+        self.project_panel.show_project_health(project_id, health_data)
 
     def _get_status_icon(self, status: str) -> str:
         """Get status icon for project status."""
