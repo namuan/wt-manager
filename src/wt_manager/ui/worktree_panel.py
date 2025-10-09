@@ -57,12 +57,15 @@ class CreateWorktreeDialog(QDialog):
         """Set up the dialog UI."""
         layout = QVBoxLayout(self)
 
+        # Create a fixed top section that won't be affected by dynamic content
+        top_section = QVBoxLayout()
+
         # Project info
         info_group = QGroupBox("Project Information")
         info_layout = QFormLayout(info_group)
         info_layout.addRow("Project:", QLabel(self.project.get_display_name()))
         info_layout.addRow("Repository:", QLabel(self.project.path))
-        layout.addWidget(info_group)
+        top_section.addWidget(info_group)
 
         # Worktree configuration
         config_group = QGroupBox("Worktree Configuration")
@@ -159,25 +162,34 @@ class CreateWorktreeDialog(QDialog):
         options_section.addLayout(options_grid)
         config_layout.addLayout(options_section)
 
-        layout.addWidget(config_group)
+        top_section.addWidget(config_group)
+
+        # Add the fixed top section to the main layout
+        layout.addLayout(top_section)
+
+        # Create a dynamic section for validation messages and other dynamic content
+        dynamic_section = QVBoxLayout()
 
         # Validation status
         self.validation_status = QLabel()
         self.validation_status.setWordWrap(True)
         self.validation_status.hide()
-        layout.addWidget(self.validation_status)
+        dynamic_section.addWidget(self.validation_status)
 
         # Validation progress
         self.validation_progress = QProgressBar()
         self.validation_progress.setRange(0, 0)  # Indeterminate
         self.validation_progress.hide()
-        layout.addWidget(self.validation_progress)
+        dynamic_section.addWidget(self.validation_progress)
 
         # Path preview
         self.path_preview_group = QGroupBox("Path Preview")
         self.path_preview_layout = QFormLayout(self.path_preview_group)
         self.path_preview_group.hide()
-        layout.addWidget(self.path_preview_group)
+        dynamic_section.addWidget(self.path_preview_group)
+
+        # Add the dynamic section to the main layout
+        layout.addLayout(dynamic_section)
 
         # Buttons
         self.button_box = QDialogButtonBox(
