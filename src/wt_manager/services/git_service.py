@@ -213,7 +213,12 @@ class GitService(GitServiceInterface):
         return worktree
 
     def create_worktree(
-        self, repo_path: str, worktree_path: str, branch: str
+        self,
+        repo_path: str,
+        worktree_path: str,
+        branch: str,
+        auto_create_branch: bool = False,
+        base_branch: str = "main",
     ) -> CommandResult:
         """
         Create a new worktree.
@@ -222,6 +227,8 @@ class GitService(GitServiceInterface):
             repo_path: Path to the Git repository
             worktree_path: Path where the new worktree should be created
             branch: Branch name for the worktree
+            auto_create_branch: Whether to create the branch if it doesn't exist
+            base_branch: Base branch to create the new branch from (if auto_create_branch is True)
 
         Returns:
             CommandResult: Result of the worktree creation
@@ -230,37 +237,103 @@ class GitService(GitServiceInterface):
             GitError: If the operation fails
         """
         try:
-            # Validate inputs
-            if not repo_path or not worktree_path or not branch:
-                raise ValidationError(
-                    "Repository path, worktree path, and branch are required"
-                )
+            self._validate_worktree_inputs(repo_path, worktree_path, branch)
+            self._check_worktree_path_exists(worktree_path)
 
-            # Check if worktree path already exists
-            if Path(worktree_path).exists():
-                raise GitError(f"Worktree path already exists: {worktree_path}")
-
-            # Create the worktree
+            # Try to create the worktree with existing branch
             result = self._run_git_command(
                 ["worktree", "add", worktree_path, branch], cwd=repo_path
             )
 
-            if not result.success:
-                # Handle common error cases
-                if "already exists" in result.error.lower():
-                    raise GitError(f"Worktree path already exists: {worktree_path}")
-                elif "not a valid branch" in result.error.lower():
-                    raise GitError(f"Branch '{branch}' does not exist")
-                else:
-                    raise GitError(f"Failed to create worktree: {result.error}")
+            if result.success:
+                logger.info(f"Created worktree at {worktree_path} for branch {branch}")
+                return result
 
-            logger.info(f"Created worktree at {worktree_path} for branch {branch}")
-            return result
+            # Handle failure cases
+            return self._handle_worktree_creation_failure(
+                result,
+                repo_path,
+                worktree_path,
+                branch,
+                auto_create_branch,
+                base_branch,
+            )
 
         except Exception as e:
             if isinstance(e, (GitError, ValidationError)):
                 raise
             raise GitError(f"Failed to create worktree: {e}")
+
+    def _validate_worktree_inputs(
+        self, repo_path: str, worktree_path: str, branch: str
+    ) -> None:
+        """Validate inputs for worktree creation."""
+        if not repo_path or not worktree_path or not branch:
+            raise ValidationError(
+                "Repository path, worktree path, and branch are required"
+            )
+
+    def _check_worktree_path_exists(self, worktree_path: str) -> None:
+        """Check if worktree path already exists."""
+        if Path(worktree_path).exists():
+            raise GitError(f"Worktree path already exists: {worktree_path}")
+
+    def _handle_worktree_creation_failure(
+        self,
+        result: CommandResult,
+        repo_path: str,
+        worktree_path: str,
+        branch: str,
+        auto_create_branch: bool,
+        base_branch: str,
+    ) -> CommandResult:
+        """Handle worktree creation failure and attempt recovery."""
+        error_msg = result.error.lower()
+
+        if "already exists" in error_msg:
+            raise GitError(f"Worktree path already exists: {worktree_path}")
+
+        if self._is_branch_not_found_error(error_msg):
+            return self._handle_missing_branch(
+                repo_path, worktree_path, branch, auto_create_branch, base_branch
+            )
+
+        raise GitError(f"Failed to create worktree: {result.error}")
+
+    def _is_branch_not_found_error(self, error_msg: str) -> bool:
+        """Check if error indicates branch not found."""
+        return "not a valid branch" in error_msg or "invalid reference" in error_msg
+
+    def _handle_missing_branch(
+        self,
+        repo_path: str,
+        worktree_path: str,
+        branch: str,
+        auto_create_branch: bool,
+        base_branch: str,
+    ) -> CommandResult:
+        """Handle missing branch case."""
+        if not auto_create_branch:
+            raise GitError(f"Branch '{branch}' does not exist")
+
+        logger.info(
+            f"Branch '{branch}' doesn't exist, attempting to create it from '{base_branch}'"
+        )
+
+        create_result = self._run_git_command(
+            ["worktree", "add", "-b", branch, worktree_path, base_branch],
+            cwd=repo_path,
+        )
+
+        if not create_result.success:
+            raise GitError(
+                f"Failed to create branch '{branch}' and worktree: {create_result.error}"
+            )
+
+        logger.info(
+            f"Created branch '{branch}' from '{base_branch}' and worktree at {worktree_path}"
+        )
+        return create_result
 
     def remove_worktree(self, worktree_path: str, force: bool = False) -> CommandResult:
         """

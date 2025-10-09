@@ -417,6 +417,8 @@ class ApplicationController(QObject):
 
             path = config.get("path", "")
             branch = config.get("branch", "")
+            auto_create_branch = config.get("auto_create_branch", False)
+            base_branch = config.get("base_branch", "main")
 
             self.logger.info(f"Creating worktree at {path} for branch {branch}")
 
@@ -424,7 +426,9 @@ class ApplicationController(QObject):
                 self.main_window.show_progress("Creating worktree...")
 
             # Create worktree through service
-            worktree = self.worktree_service.create_worktree(project, path, branch)
+            worktree = self.worktree_service.create_worktree(
+                project, path, branch, auto_create_branch, base_branch
+            )
 
             # Update project in local state
             self._projects[project_id] = project

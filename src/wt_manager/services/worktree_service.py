@@ -100,7 +100,14 @@ class WorktreeService(WorktreeServiceInterface):
                 f"Failed to get worktrees for project {project_name}: {e}"
             )
 
-    def create_worktree(self, project: Project, path: str, branch: str) -> Worktree:
+    def create_worktree(
+        self,
+        project: Project,
+        path: str,
+        branch: str,
+        auto_create_branch: bool = False,
+        base_branch: str = "main",
+    ) -> Worktree:
         """
         Create a new worktree for a project.
 
@@ -108,6 +115,8 @@ class WorktreeService(WorktreeServiceInterface):
             project: Project to create worktree for
             path: Path where the worktree should be created
             branch: Branch name for the worktree
+            auto_create_branch: Whether to create the branch if it doesn't exist
+            base_branch: Base branch to create the new branch from
 
         Returns:
             Worktree: The newly created worktree
@@ -142,7 +151,7 @@ class WorktreeService(WorktreeServiceInterface):
 
             # Create the worktree using Git service
             result = self._git_service.create_worktree(
-                project.path, normalized_path, branch
+                project.path, normalized_path, branch, auto_create_branch, base_branch
             )
             if not result.success:
                 raise ServiceError(f"Failed to create worktree: {result.error}")

@@ -93,7 +93,14 @@ class WorktreeServiceInterface(BaseService):
         pass
 
     @abstractmethod
-    def create_worktree(self, project: Any, path: str, branch: str) -> Any:
+    def create_worktree(
+        self,
+        project: Any,
+        path: str,
+        branch: str,
+        auto_create_branch: bool = False,
+        base_branch: str = "main",
+    ) -> Any:
         """Create a new worktree."""
         pass
 
@@ -123,7 +130,12 @@ class GitServiceInterface(BaseService):
 
     @abstractmethod
     def create_worktree(
-        self, repo_path: str, worktree_path: str, branch: str
+        self,
+        repo_path: str,
+        worktree_path: str,
+        branch: str,
+        auto_create_branch: bool = False,
+        base_branch: str = "main",
     ) -> CommandResult:
         """Create a worktree."""
         pass

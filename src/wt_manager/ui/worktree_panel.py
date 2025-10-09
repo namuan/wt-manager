@@ -116,9 +116,22 @@ class CreateWorktreeDialog(QDialog):
         config_layout.addRow("Branch:", branch_layout)
 
         # Options
+        options_layout = QVBoxLayout()
+
         self.fetch_remote_check = QCheckBox("Fetch remote changes before creating")
         self.fetch_remote_check.setChecked(True)
-        config_layout.addRow("Options:", self.fetch_remote_check)
+        options_layout.addWidget(self.fetch_remote_check)
+
+        self.auto_create_branch_check = QCheckBox(
+            "Auto-create branch if it doesn't exist"
+        )
+        self.auto_create_branch_check.setChecked(True)
+        self.auto_create_branch_check.setToolTip(
+            "Automatically create the branch if it doesn't exist in the repository"
+        )
+        options_layout.addWidget(self.auto_create_branch_check)
+
+        config_layout.addRow("Options:", options_layout)
 
         layout.addWidget(config_group)
 
@@ -322,6 +335,7 @@ class CreateWorktreeDialog(QDialog):
             if self.new_branch_radio.isChecked()
             else None,
             "fetch_remote": self.fetch_remote_check.isChecked(),
+            "auto_create_branch": self.auto_create_branch_check.isChecked(),
         }
 
 
