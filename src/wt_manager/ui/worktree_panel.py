@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -65,41 +66,60 @@ class CreateWorktreeDialog(QDialog):
 
         # Worktree configuration
         config_group = QGroupBox("Worktree Configuration")
-        config_layout = QFormLayout(config_group)
+        config_layout = QVBoxLayout(
+            config_group
+        )  # Changed from QFormLayout to QVBoxLayout for better control
 
-        # Worktree path
+        # Worktree path section
+        path_section = QVBoxLayout()
+        path_label = QLabel("Worktree Path:")
+        path_section.addWidget(path_label)
+
         path_layout = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText("Enter worktree directory path...")
-        path_layout.addWidget(self.path_edit)
+        path_layout.addWidget(self.path_edit, 1)  # Give path edit stretch factor of 1
 
         self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setFixedWidth(100)  # Fixed width for browse button
         self.browse_btn.clicked.connect(self._browse_for_path)
         path_layout.addWidget(self.browse_btn)
 
-        config_layout.addRow("Worktree Path:", path_layout)
+        path_section.addLayout(path_layout)
+        config_layout.addLayout(path_section)
 
-        # Branch selection
-        branch_layout = QVBoxLayout()
+        # Branch selection section
+        branch_section = QVBoxLayout()
+        branch_label = QLabel("Branch:")
+        branch_section.addWidget(branch_label)
 
-        # Branch type selection
-        self.existing_branch_radio = QRadioButton("Use existing branch")
+        # Existing branch option
+        existing_branch_layout = QHBoxLayout()
+        self.existing_branch_radio = QRadioButton("Use existing branch:")
         self.existing_branch_radio.setChecked(True)
-        branch_layout.addWidget(self.existing_branch_radio)
+        existing_branch_layout.addWidget(self.existing_branch_radio)
 
         self.branch_combo = QComboBox()
         self.branch_combo.setEditable(False)
         self.branch_combo.addItems(self.available_branches)
-        branch_layout.addWidget(self.branch_combo)
+        existing_branch_layout.addWidget(self.branch_combo, 1)  # Expand to fill space
+        branch_section.addLayout(existing_branch_layout)
 
-        self.new_branch_radio = QRadioButton("Create new branch")
-        branch_layout.addWidget(self.new_branch_radio)
-
+        # New branch option
         new_branch_layout = QHBoxLayout()
+        self.new_branch_radio = QRadioButton("Create new branch:")
+        new_branch_layout.addWidget(self.new_branch_radio)
+
         self.new_branch_edit = QLineEdit()
         self.new_branch_edit.setPlaceholderText("Enter new branch name...")
         self.new_branch_edit.setEnabled(False)
-        new_branch_layout.addWidget(self.new_branch_edit)
+        new_branch_layout.addWidget(
+            self.new_branch_edit, 2
+        )  # Give more space to branch name
+
+        from_label = QLabel("from")
+        from_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        new_branch_layout.addWidget(from_label)
 
         self.base_branch_combo = QComboBox()
         self.base_branch_combo.addItem("main")
@@ -108,19 +128,24 @@ class CreateWorktreeDialog(QDialog):
             [b for b in self.available_branches if b not in ["main", "master"]]
         )
         self.base_branch_combo.setEnabled(False)
-        new_branch_layout.addWidget(QLabel("from"))
-        new_branch_layout.addWidget(self.base_branch_combo)
+        new_branch_layout.addWidget(
+            self.base_branch_combo, 1
+        )  # Expand base branch combo
 
-        branch_layout.addLayout(new_branch_layout)
+        branch_section.addLayout(new_branch_layout)
+        config_layout.addLayout(branch_section)
 
-        config_layout.addRow("Branch:", branch_layout)
+        # Options section
+        options_section = QVBoxLayout()
+        options_label = QLabel("Options:")
+        options_section.addWidget(options_label)
 
-        # Options
-        options_layout = QVBoxLayout()
+        # Arrange options in a grid for better space utilization
+        options_grid = QGridLayout()
 
         self.fetch_remote_check = QCheckBox("Fetch remote changes before creating")
         self.fetch_remote_check.setChecked(True)
-        options_layout.addWidget(self.fetch_remote_check)
+        options_grid.addWidget(self.fetch_remote_check, 0, 0)
 
         self.auto_create_branch_check = QCheckBox(
             "Auto-create branch if it doesn't exist"
@@ -129,9 +154,10 @@ class CreateWorktreeDialog(QDialog):
         self.auto_create_branch_check.setToolTip(
             "Automatically create the branch if it doesn't exist in the repository"
         )
-        options_layout.addWidget(self.auto_create_branch_check)
+        options_grid.addWidget(self.auto_create_branch_check, 0, 1)
 
-        config_layout.addRow("Options:", options_layout)
+        options_section.addLayout(options_grid)
+        config_layout.addLayout(options_section)
 
         layout.addWidget(config_group)
 
