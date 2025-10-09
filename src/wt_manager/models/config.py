@@ -44,6 +44,7 @@ class UserPreferences:
     max_command_history: int = 100
     command_timeout: int = 300  # 5 minutes
     git_fetch_on_create: bool = True
+    worktree_base_path: str = ""  # Base path for all worktrees
     window_geometry: dict[str, int] = field(default_factory=dict)
     panel_sizes: dict[str, int] = field(default_factory=dict)
 
@@ -64,6 +65,7 @@ class UserPreferences:
             "max_command_history": self.max_command_history,
             "command_timeout": self.command_timeout,
             "git_fetch_on_create": self.git_fetch_on_create,
+            "worktree_base_path": self.worktree_base_path,
             "window_geometry": self.window_geometry,
             "panel_sizes": self.panel_sizes,
         }
@@ -89,6 +91,7 @@ class UserPreferences:
             max_command_history=data.get("max_command_history", 100),
             command_timeout=data.get("command_timeout", 300),
             git_fetch_on_create=data.get("git_fetch_on_create", True),
+            worktree_base_path=data.get("worktree_base_path", ""),
             window_geometry=data.get("window_geometry", {}),
             panel_sizes=data.get("panel_sizes", {}),
         )

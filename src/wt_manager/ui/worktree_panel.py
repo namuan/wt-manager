@@ -36,10 +36,17 @@ from ..services.message_service import get_message_service
 class CreateWorktreeDialog(QDialog):
     """Dialog for creating a new worktree."""
 
-    def __init__(self, project: Project, available_branches: list[str], parent=None):
+    def __init__(
+        self,
+        project: Project,
+        available_branches: list[str],
+        base_path: str = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.project = project
         self.available_branches = available_branches
+        self.base_path = base_path
 
         self.setWindowTitle(f"Create Worktree - {project.get_display_name()}")
         self.setModal(True)
@@ -202,6 +209,21 @@ class CreateWorktreeDialog(QDialog):
         # Initially disable OK button
         self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
 
+        # Initialize with base path if provided
+        self._initialize_base_path()
+
+    def _initialize_base_path(self):
+        """Initialize the path field with base path if configured."""
+        if self.base_path and Path(self.base_path).exists():
+            # Auto-populate with base path + project name
+            suggested_path = str(Path(self.base_path) / self.project.get_display_name())
+            self.path_edit.setText(suggested_path)
+            self.path_edit.setToolTip(
+                f"Auto-populated from configured base path: {self.base_path}"
+            )
+        else:
+            self.path_edit.setToolTip("Enter worktree directory path...")
+
     def _setup_connections(self):
         """Set up signal connections."""
         self.path_edit.textChanged.connect(self._on_input_changed)
@@ -212,8 +234,11 @@ class CreateWorktreeDialog(QDialog):
 
     def _browse_for_path(self):
         """Browse for worktree path."""
-        # Suggest a default path based on project
-        default_path = str(Path(self.project.path).parent)
+        # Use base path as default if configured, otherwise use project parent
+        if self.base_path and Path(self.base_path).exists():
+            default_path = self.base_path
+        else:
+            default_path = str(Path(self.project.path).parent)
 
         path = QFileDialog.getExistingDirectory(
             self,
@@ -628,9 +653,10 @@ class WorktreePanel(QWidget):
     refresh_worktrees_requested = pyqtSignal(str)  # project_id
     get_available_branches_requested = pyqtSignal(str)  # project_id
 
-    def __init__(self, parent=None):
+    def __init__(self, config=None, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
+        self.config = config
 
         # Current state
         self._current_project: Project | None = None
@@ -1265,7 +1291,14 @@ class WorktreePanel(QWidget):
         if not self._current_project:
             return None
 
-        dialog = CreateWorktreeDialog(self._current_project, available_branches, self)
+        # Get base path from config if available
+        base_path = None
+        if self.config and hasattr(self.config, "user_preferences"):
+            base_path = self.config.user_preferences.worktree_base_path
+
+        dialog = CreateWorktreeDialog(
+            self._current_project, available_branches, base_path, self
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return dialog.get_worktree_config()
         return None

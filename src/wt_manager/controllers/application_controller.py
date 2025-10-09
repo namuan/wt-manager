@@ -59,6 +59,9 @@ class ApplicationController(QObject):
         # UI
         self.main_window: MainWindow | None = None
 
+        # Configuration
+        self.config = self.config_manager.config
+
         # Error handler
         self.error_handler = ErrorHandler()
 
@@ -94,6 +97,7 @@ class ApplicationController(QObject):
             self.main_window = MainWindow(
                 command_service=self.command_service,
                 validation_service=self.validation_service,
+                config=self.config,
             )
 
             # Connect UI signals to controller methods
@@ -132,6 +136,9 @@ class ApplicationController(QObject):
         self.main_window.refresh_worktrees_requested.connect(
             self._handle_refresh_worktrees
         )
+
+        # Preferences management signals
+        self.main_window.preferences_updated.connect(self._handle_preferences_updated)
 
         # Connect controller signals to UI updates
         self.project_added.connect(self._on_project_added)
@@ -625,6 +632,34 @@ class ApplicationController(QObject):
     def _handle_refresh_worktrees(self, project_id: str) -> None:
         """Handle refresh worktrees request from UI."""
         self._refresh_project_worktrees(project_id)
+
+    def _handle_preferences_updated(self, preferences) -> None:
+        """Handle preferences updated signal from UI."""
+        try:
+            self.logger.info("Updating user preferences")
+
+            # Update the configuration with new preferences
+            self.config.preferences = preferences
+
+            # Save the configuration
+            success = self.config_manager.save_config()
+
+            if success:
+                self.logger.info("User preferences saved successfully")
+
+                # Update auto-refresh timer if needed
+                self._setup_auto_refresh()
+            else:
+                self.logger.error("Failed to save user preferences")
+                self.application_error.emit(
+                    "Preferences Error", "Failed to save preferences to disk"
+                )
+
+        except Exception as e:
+            self.logger.error(f"Exception while updating preferences: {e}")
+            self.application_error.emit(
+                "Preferences Error", f"Failed to update preferences: {e}"
+            )
 
     # Helper methods
     def _load_project_worktrees(self, project: Project) -> None:

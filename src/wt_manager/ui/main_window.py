@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QProgressBar,
     QGroupBox,
+    QDialog,
 )
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QAction
@@ -19,6 +20,7 @@ from .project_panel import ProjectPanel
 from .worktree_panel import WorktreePanel
 from .command_dialog import CommandInputDialog
 from .command_output_widget import CommandOutputPanel
+from .preferences_dialog import PreferencesDialog
 from ..services.message_service import initialize_message_service
 
 
@@ -39,11 +41,13 @@ class MainWindow(QMainWindow):
     open_worktree_requested = pyqtSignal(str, str)  # worktree_path, action_type
     run_command_requested = pyqtSignal(str)  # worktree_path
     refresh_worktrees_requested = pyqtSignal(str)  # project_id
+    preferences_updated = pyqtSignal(object)  # UserPreferences
 
-    def __init__(self, command_service=None, validation_service=None):
+    def __init__(self, command_service=None, validation_service=None, config=None):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.settings = QSettings()
+        self.config = config
 
         # Services
         self.command_service = command_service
@@ -107,7 +111,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.project_panel)
 
         # Create worktree panel
-        self.worktree_panel = WorktreePanel()
+        self.worktree_panel = WorktreePanel(self.config)
         self.worktree_panel.setAccessibleName("Worktrees panel")
         self.worktree_panel.setToolTip(
             "Manage worktrees for the selected project - Create, remove, and open worktrees"
@@ -271,6 +275,15 @@ class MainWindow(QMainWindow):
         self.collapse_all_action = QAction("&Collapse All", self)
         self.collapse_all_action.setStatusTip("Collapse all project sections")
         view_menu.addAction(self.collapse_all_action)
+
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+
+        self.preferences_action = QAction("&Preferences...", self)
+        self.preferences_action.setShortcut("Ctrl+,")
+        self.preferences_action.setStatusTip("Configure application preferences")
+        self.preferences_action.triggered.connect(self._show_preferences_dialog)
+        edit_menu.addAction(self.preferences_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -765,6 +778,19 @@ class MainWindow(QMainWindow):
         """
 
         QMessageBox.about(self, "About Git Worktree Manager", about_text)
+
+    def _show_preferences_dialog(self) -> None:
+        """Show the preferences dialog."""
+        # Get current preferences from config
+        current_prefs = self.config.preferences
+
+        dialog = PreferencesDialog(current_prefs, self)
+        dialog.preferences_changed.connect(self.preferences_updated.emit)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.logger.info("Preferences dialog accepted")
+        else:
+            self.logger.info("Preferences dialog cancelled")
 
     def _show_keyboard_shortcuts(self) -> None:
         """Show the keyboard shortcuts dialog."""
