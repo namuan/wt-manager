@@ -16,6 +16,7 @@ from wt_manager.ui.project_panel import (
     AddProjectDialog,
     ProjectHealthDialog,
 )
+from wt_manager.ui.project_action_dialog import ProjectActionDialog
 from wt_manager.models.project import Project, ProjectStatus
 
 
@@ -412,7 +413,7 @@ class TestProjectPanel:
         }
 
         # Mock dialog execution
-        with patch.object(ProjectHealthDialog, "exec") as mock_exec:
+        with patch.object(ProjectActionDialog, "exec") as mock_exec:
             panel.show_project_health(sample_projects[0].id, health_data)
             mock_exec.assert_called_once()
 

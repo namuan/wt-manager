@@ -163,6 +163,12 @@ class MainWindow(QMainWindow):
         self.project_panel.project_health_requested.connect(
             self.project_health_requested.emit
         )
+        self.project_panel.create_worktree_requested.connect(
+            self.create_worktree_requested.emit
+        )
+        self.project_panel.get_available_branches_requested.connect(
+            self.worktree_panel.get_available_branches_requested.emit
+        )
 
         # Worktree panel connections
         self.worktree_panel.worktree_selected.connect(self._on_worktree_selected)

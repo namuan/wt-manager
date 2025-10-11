@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 
 from ..models.project import Project, ProjectStatus
 from ..services.message_service import get_message_service
+from .project_action_dialog import ProjectActionDialog
 
 
 class ProjectHealthDialog(QDialog):
@@ -395,6 +396,8 @@ class ProjectPanel(QWidget):
     remove_project_requested = pyqtSignal(str)  # project_id
     refresh_projects_requested = pyqtSignal()
     project_health_requested = pyqtSignal(str)  # project_id
+    create_worktree_requested = pyqtSignal(str, dict)  # project_id, config
+    get_available_branches_requested = pyqtSignal(str)  # project_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -745,7 +748,7 @@ class ProjectPanel(QWidget):
 
     def show_project_health(self, project_id: str, health_data: dict):
         """
-        Show project health status dialog.
+        Show project health and actions dialog.
 
         Args:
             project_id: ID of the project
@@ -756,7 +759,26 @@ class ProjectPanel(QWidget):
             self.logger.error(f"Project not found for health display: {project_id}")
             return
 
-        dialog = ProjectHealthDialog(project, health_data, self)
+        # Request available branches for the worktree creation tab
+        self.get_available_branches_requested.emit(project_id)
+
+        # For now, use default branches - this will be updated when branches are received
+        available_branches = ["main", "master", "develop", "dev"]
+
+        # Get base path from config (this would be passed from main window)
+        # For now, use a worktrees directory in the workspace
+        from pathlib import Path
+
+        workspace_parent = Path(project.path).parent
+        base_path = str(workspace_parent / "worktrees")
+
+        dialog = ProjectActionDialog(
+            project, health_data, available_branches, base_path, self
+        )
+
+        # Connect the create worktree signal
+        dialog.create_worktree_requested.connect(self.create_worktree_requested.emit)
+
         dialog.exec()
 
     def update_project_status_indicators(self):
