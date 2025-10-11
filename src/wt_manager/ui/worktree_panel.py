@@ -719,8 +719,7 @@ class WorktreePanel(QWidget):
 
     def _create_filter_section(self, layout: QVBoxLayout):
         """Create the filter section."""
-        filter_group = QGroupBox("Filters")
-        filter_layout = QVBoxLayout(filter_group)
+        filter_layout = QVBoxLayout()
         filter_layout.setSpacing(4)
 
         # Text search
@@ -764,7 +763,7 @@ class WorktreePanel(QWidget):
         dropdown_layout.addWidget(self.clear_filters_btn)
 
         filter_layout.addLayout(dropdown_layout)
-        layout.addWidget(filter_group)
+        layout.addLayout(filter_layout)
 
     def _create_worktree_list(self, layout: QVBoxLayout):
         """Create the worktree list view."""
@@ -780,6 +779,9 @@ class WorktreePanel(QWidget):
         self.model.setHorizontalHeaderLabels(
             ["Directory", "Branch", "Status", "Commit", "Age"]
         )
+
+        # Disable editing
+        self.worktree_view.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
 
         layout.addWidget(self.worktree_view)
 

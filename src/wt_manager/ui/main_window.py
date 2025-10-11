@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QLabel,
     QFrame,
-    QSizePolicy,
-    QProgressBar,
     QGroupBox,
     QDialog,
 )
@@ -320,48 +318,8 @@ class MainWindow(QMainWindow):
 
     def _setup_toolbar(self) -> None:
         """Set up the toolbar."""
-        toolbar = self.addToolBar("Main")
-        toolbar.setObjectName("MainToolBar")
-        toolbar.setMovable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        toolbar.setAccessibleName("Main toolbar")
-        toolbar.setToolTip("Main application toolbar with common actions")
-
-        # Add project action
-        self.add_project_action.setToolTip("Add a new Git project to manage (Ctrl+N)")
-        toolbar.addAction(self.add_project_action)
-
-        toolbar.addSeparator()
-
-        # Refresh action
-        self.refresh_action.setToolTip("Refresh all projects and their worktrees (F5)")
-        toolbar.addAction(self.refresh_action)
-
-        toolbar.addSeparator()
-
-        # Worktree actions
-        self.new_worktree_action.setToolTip(
-            "Create a new worktree for the selected project (Ctrl+W)"
-        )
-        toolbar.addAction(self.new_worktree_action)
-
-        self.run_command_action.setToolTip(
-            "Run a command in the selected worktree (Ctrl+T)"
-        )
-        toolbar.addAction(self.run_command_action)
-
-        # Add stretch to push status to the right
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        toolbar.addWidget(spacer)
-
-        # Progress bar for operations
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumWidth(200)
-        self.progress_bar.setAccessibleName("Operation progress")
-        self.progress_bar.setToolTip("Shows progress of current operations")
-        toolbar.addWidget(self.progress_bar)
+        # Toolbar removed as it's no longer needed
+        pass
 
     def _setup_status_bar(self) -> None:
         """Set up the status bar."""
@@ -536,23 +494,21 @@ class MainWindow(QMainWindow):
             self.worktree_count_label.setText(f"{count} worktrees")
 
     def show_progress(self, message: str = "") -> None:
-        """Show progress bar with optional message."""
-        self.progress_bar.setVisible(True)
+        """Show progress indication with optional message."""
         if message:
             self.update_operation_status(message)
 
     def hide_progress(self) -> None:
-        """Hide progress bar."""
-        self.progress_bar.setVisible(False)
+        """Hide progress indication."""
         self.update_operation_status("Ready")
 
     def set_progress_value(self, value: int) -> None:
-        """Set progress bar value (0-100)."""
-        self.progress_bar.setValue(value)
+        """Set progress value (0-100) - no-op since progress bar removed."""
+        pass
 
     def set_progress_indeterminate(self) -> None:
-        """Set progress bar to indeterminate mode."""
-        self.progress_bar.setRange(0, 0)
+        """Set progress to indeterminate mode - no-op since progress bar removed."""
+        pass
 
     def populate_projects(self, projects: list) -> None:
         """Populate the project list with project data."""
