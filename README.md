@@ -3,6 +3,8 @@
 A desktop application to manage multiple Git worktrees efficiently.
 This tool provides a graphical interface for creating, removing, and monitoring Git worktrees with real-time status updates.
 
+![](assets/intro.png)
+
 ## Features
 
 - **Worktree Management**: Create, remove, and list Git worktrees
