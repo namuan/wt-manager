@@ -97,10 +97,15 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(6)
 
+        # Create vertical splitter for main content and command panel
+        self.vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.vertical_splitter.setAccessibleName("Vertical content splitter")
+        main_layout.addWidget(self.vertical_splitter)
+
         # Create splitter for dual-pane layout
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setAccessibleName("Main content splitter")
-        main_layout.addWidget(self.main_splitter)
+        self.vertical_splitter.addWidget(self.main_splitter)
 
         # Create project panel
         self.project_panel = ProjectPanel()
@@ -122,7 +127,7 @@ class MainWindow(QMainWindow):
         self.command_panel_group = QGroupBox("Command Output")
         self.command_panel_group.setCheckable(True)
         self.command_panel_group.setChecked(False)  # Ensure it starts unchecked
-        self.command_panel_group.setMaximumHeight(400)
+        self.command_panel_group.setMinimumHeight(100)
         self.command_panel_group.setAccessibleName("Command output panel")
         self.command_panel_group.setToolTip(
             "View real-time output from commands executed in worktrees"
@@ -134,12 +139,17 @@ class MainWindow(QMainWindow):
         self.command_panel = CommandOutputPanel()
         command_panel_layout.addWidget(self.command_panel)
 
-        main_layout.addWidget(self.command_panel_group)
+        self.vertical_splitter.addWidget(self.command_panel_group)
 
         # Set initial splitter proportions (30% projects, 70% worktrees)
         self.main_splitter.setSizes([350, 850])
         self.main_splitter.setStretchFactor(0, 0)  # Project panel fixed
         self.main_splitter.setStretchFactor(1, 1)  # Worktree panel stretches
+
+        # Set vertical splitter proportions (main content stretches, command panel minimum)
+        self.vertical_splitter.setSizes([700, 200])
+        self.vertical_splitter.setStretchFactor(0, 1)  # Main splitter stretches
+        self.vertical_splitter.setStretchFactor(1, 0)  # Command panel fixed
 
         # Set up focus policy for better keyboard navigation
         self.project_panel.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -392,6 +402,7 @@ class MainWindow(QMainWindow):
         self.toggle_command_panel_action.setText(
             "Hide Command &Output" if checked else "Show Command &Output"
         )
+        self.command_panel_group.setVisible(checked)
 
     def _on_project_selected(self, project_id: str) -> None:
         """Handle project selection change."""
@@ -476,6 +487,7 @@ class MainWindow(QMainWindow):
         """Show the command output panel."""
         if not self.command_panel_group.isChecked():
             self.command_panel_group.setChecked(True)
+            self.command_panel_group.setVisible(True)
             self.toggle_command_panel_action.setChecked(True)
             self.toggle_command_panel_action.setText("Hide Command &Output")
 
@@ -483,6 +495,7 @@ class MainWindow(QMainWindow):
         """Hide the command output panel."""
         if self.command_panel_group.isChecked():
             self.command_panel_group.setChecked(False)
+            self.command_panel_group.setVisible(False)
             self.toggle_command_panel_action.setChecked(False)
             self.toggle_command_panel_action.setText("Show Command &Output")
 
@@ -592,15 +605,10 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("splitterSizes", self.main_splitter.sizes())
+        self.settings.setValue("verticalSplitterSizes", self.vertical_splitter.sizes())
         self.settings.setValue(
             "commandPanelVisible", self.command_panel_group.isChecked()
         )
-
-        # Save command panel height if visible
-        if self.command_panel_group.isChecked():
-            self.settings.setValue(
-                "commandPanelHeight", self.command_panel_group.height()
-            )
 
         self.logger.debug("Window state saved")
 
@@ -620,15 +628,22 @@ class MainWindow(QMainWindow):
             sizes = [int(size) for size in splitter_sizes]
             self.main_splitter.setSizes(sizes)
 
+        vertical_splitter_sizes = self.settings.value("verticalSplitterSizes")
+        if vertical_splitter_sizes:
+            # Convert to list of integers
+            sizes = [int(size) for size in vertical_splitter_sizes]
+            self.vertical_splitter.setSizes(sizes)
+        else:
+            # Backward compatibility: if no vertical sizes, use default
+            self.vertical_splitter.setSizes([700, 200])
+
         command_panel_visible = self.settings.value(
             "commandPanelVisible", False, type=bool
         )
         if command_panel_visible:
             self.show_command_panel()
-
-            # Restore command panel height
-            panel_height = self.settings.value("commandPanelHeight", 300, type=int)
-            self.command_panel_group.setMaximumHeight(panel_height)
+        else:
+            self.command_panel_group.setVisible(False)
 
         self.logger.debug("Window state restored")
 
