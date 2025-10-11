@@ -9,8 +9,10 @@ This tool provides a graphical interface for creating, removing, and monitoring 
 - **Status Monitoring**: Track uncommitted changes, detached HEAD state, and branch information
 - **Project Organization**: Organize worktrees by project
 - **Real-time Updates**: Refresh worktree information automatically
-- **Command Execution**: Run Git commands within the application
-- **Error Handling**: Comprehensive error handling and user feedback
+- **Command Execution**: Run Git commands within the application with enhanced vertical splitter integration
+- **Custom Application Management**: Configure and manage custom applications for worktrees in preferences
+- **Worktree Base Path Configuration**: Set custom base paths for worktrees in preferences
+- **Worktree Creation Dialog**: Streamlined dialog for creating new worktrees
 
 ## Installation
 
@@ -19,8 +21,8 @@ To install from source:
 1. **Clone the repository or download the ZIP file:**
 
    ```bash
-   git clone https://github.com/namuan/dev-boost.git
-   cd dev-boost
+   git clone https://github.com/namuan/wt-manager.git
+   cd wt-manager
    ```
 
 2. **Run the installation script (macOS):**
