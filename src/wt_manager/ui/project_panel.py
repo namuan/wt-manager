@@ -161,7 +161,8 @@ class AddProjectDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Add Project")
         self.setModal(True)
-        self.resize(550, 300)
+        self.setMinimumSize(500, 200)
+        self.resize(600, 250)
 
         # Validation timer to debounce validation
         self.validation_timer = QTimer()
@@ -190,23 +191,35 @@ class AddProjectDialog(QDialog):
         self.validation_progress.setRange(0, 0)  # Indeterminate
         self.validation_progress.hide()
 
-        # Path info display
+        # Path info display - more compact
         self.path_info_group = QGroupBox("Path Information")
         self.path_info_layout = QFormLayout(self.path_info_group)
+        self.path_info_layout.setContentsMargins(6, 6, 6, 6)
+        self.path_info_layout.setSpacing(2)
         self.path_info_group.hide()
 
-        # Layout
+        # Layout with reduced margins and spacing
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
 
-        # Form layout for inputs
+        # Form layout for inputs with reduced spacing
         form_layout = QFormLayout()
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(6)
+        form_layout.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
 
-        # Path row with browse button
+        # Path row with browse button - make path expand
         path_layout = QHBoxLayout()
-        path_layout.addWidget(self.path_edit)
+        path_layout.setSpacing(6)
+        path_layout.addWidget(self.path_edit, 1)  # Stretch factor 1 to expand
+        self.browse_btn.setMaximumWidth(80)
         path_layout.addWidget(self.browse_btn)
         form_layout.addRow("Repository Path:", path_layout)
 
+        # Name field with expansion
         form_layout.addRow("Project Name:", self.name_edit)
         layout.addLayout(form_layout)
 
