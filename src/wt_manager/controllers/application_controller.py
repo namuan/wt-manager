@@ -570,6 +570,9 @@ class ApplicationController(QObject):
                 self._open_in_terminal(worktree_path, system)
             elif action_type == "editor":
                 self._open_in_editor(worktree_path, system)
+            elif action_type.startswith("custom_app:"):
+                app_name = action_type.split(":", 1)[1]
+                self._open_in_custom_app(worktree_path, app_name, system)
             else:
                 raise ServiceError(f"Unknown action type: {action_type}")
 
@@ -611,6 +614,24 @@ class ApplicationController(QObject):
     def _open_in_editor(self, worktree_path: str, system: str) -> None:
         """Open worktree in editor."""
         import subprocess
+        from pathlib import Path
+
+        # Check if default editor is configured
+        default_editor = self.config.preferences.default_editor.strip()
+        if default_editor:
+            try:
+                # Handle macOS .app bundles
+                if system == "Darwin" and default_editor.endswith(".app"):
+                    app_name = Path(default_editor).name
+                    subprocess.run(["open", "-a", app_name, worktree_path], check=True)
+                    return
+                else:
+                    # Try the configured editor directly
+                    subprocess.run([default_editor, worktree_path], check=True)
+                    return
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Configured editor failed, continue to fallback
+                pass
 
         # Try common editors
         editors = ["code", "subl", "atom", "vim"]
@@ -628,6 +649,41 @@ class ApplicationController(QObject):
                 subprocess.run(["start", worktree_path], shell=True)
             else:
                 subprocess.run(["xdg-open", worktree_path])
+
+    def _open_in_custom_app(
+        self, worktree_path: str, app_name: str, system: str
+    ) -> None:
+        """Open worktree in custom application."""
+        import subprocess
+
+        # Find the custom application in preferences
+        custom_apps = self.config.preferences.custom_applications
+        app_config = None
+        for app in custom_apps:
+            if app.name == app_name:
+                app_config = app
+                break
+
+        if not app_config:
+            raise ServiceError(
+                f"Custom application '{app_name}' not found in preferences"
+            )
+
+        # Substitute %PATH% placeholder in command template
+        command_template = app_config.command_template
+        command = command_template.replace("%PATH%", worktree_path)
+
+        # Execute the command
+        try:
+            if system == "Darwin":
+                command = f"open -a {command}"
+                self.logger.info(f">>> Running command: {command}")
+                subprocess.run(command, shell=True, check=True)
+            else:
+                # Split command for other systems
+                subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as e:
+            raise ServiceError(f"Failed to execute custom application command: {e}")
 
     def _handle_refresh_worktrees(self, project_id: str) -> None:
         """Handle refresh worktrees request from UI."""

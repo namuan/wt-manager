@@ -232,7 +232,6 @@ class TestWorktreePanel:
 
         # Initially no selection
         assert not panel.open_btn.isEnabled()
-        assert not panel.terminal_btn.isEnabled()
         assert not panel.run_command_btn.isEnabled()
         assert not panel.remove_btn.isEnabled()
 
@@ -245,7 +244,6 @@ class TestWorktreePanel:
 
         # Buttons should be enabled
         assert panel.open_btn.isEnabled()
-        assert panel.terminal_btn.isEnabled()
         assert panel.run_command_btn.isEnabled()
         assert panel.remove_btn.isEnabled()
 

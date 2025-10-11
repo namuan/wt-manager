@@ -670,6 +670,7 @@ class WorktreePanel(QWidget):
         self._setup_ui()
         self._setup_connections()
         self._setup_model()
+        self.update_custom_applications()
 
     def _setup_ui(self):
         """Set up the user interface."""
@@ -791,15 +792,17 @@ class WorktreePanel(QWidget):
         self.open_btn.setToolTip("Open worktree in file manager")
         actions_layout.addWidget(self.open_btn)
 
-        self.terminal_btn = QPushButton("Terminal")
-        self.terminal_btn.setEnabled(False)
-        self.terminal_btn.setToolTip("Open terminal in worktree")
-        actions_layout.addWidget(self.terminal_btn)
-
         self.run_command_btn = QPushButton("Run Command")
         self.run_command_btn.setEnabled(False)
         self.run_command_btn.setToolTip("Run command in worktree")
         actions_layout.addWidget(self.run_command_btn)
+
+        # Custom applications combo box
+        self.apps_combo = QComboBox()
+        self.apps_combo.setEnabled(False)
+        self.apps_combo.setToolTip("Select custom application to open worktree")
+        self.apps_combo.setMinimumWidth(120)
+        actions_layout.addWidget(self.apps_combo)
 
         actions_layout.addStretch()
 
@@ -858,8 +861,8 @@ class WorktreePanel(QWidget):
         # Button connections
         self.new_worktree_btn.clicked.connect(self._on_new_worktree)
         self.open_btn.clicked.connect(self._on_open_worktree)
-        self.terminal_btn.clicked.connect(self._on_open_terminal)
         self.run_command_btn.clicked.connect(self._on_run_command)
+        # self.apps_combo.activated.connect(self._on_open_custom_app)
         self.refresh_btn.clicked.connect(self._on_refresh)
         self.remove_btn.clicked.connect(self._on_remove_worktree)
 
@@ -872,6 +875,9 @@ class WorktreePanel(QWidget):
         # View connections - will be set up after model is assigned
         self.worktree_view.doubleClicked.connect(self._on_item_double_clicked)
         self.worktree_view.customContextMenuRequested.connect(self._show_context_menu)
+
+        # Remove automatic opening on combo box change - only open on double-click
+        # self.apps_combo.activated.connect(self._on_open_custom_app)  # Commented out
 
     def set_project(self, project: Project | None):
         """
@@ -1071,8 +1077,8 @@ class WorktreePanel(QWidget):
         has_selection = self.get_selected_worktree() is not None
 
         self.open_btn.setEnabled(has_selection)
-        self.terminal_btn.setEnabled(has_selection)
         self.run_command_btn.setEnabled(has_selection)
+        self.apps_combo.setEnabled(has_selection)
         self.remove_btn.setEnabled(has_selection)
 
     # Event handlers
@@ -1100,17 +1106,34 @@ class WorktreePanel(QWidget):
         if worktree:
             self.open_worktree_requested.emit(worktree.path, "file_manager")
 
-    def _on_open_terminal(self):
-        """Handle open terminal button click."""
-        worktree = self.get_selected_worktree()
-        if worktree:
-            self.open_worktree_requested.emit(worktree.path, "terminal")
-
     def _on_run_command(self):
         """Handle run command button click."""
         worktree = self.get_selected_worktree()
         if worktree:
             self.run_command_requested.emit(worktree.path)
+
+    def _on_open_custom_app(self):
+        """Handle custom application selection."""
+        worktree = self.get_selected_worktree()
+        if worktree:
+            app_name = self.apps_combo.currentText()
+            if app_name:
+                self.open_worktree_requested.emit(
+                    worktree.path, f"custom_app:{app_name}"
+                )
+
+    def update_custom_applications(self):
+        """Update the custom applications combo box with current preferences."""
+        self.apps_combo.clear()
+
+        if self.config and hasattr(self.config, "preferences"):
+            apps = self.config.preferences.custom_applications
+            if apps:
+                for app in apps:
+                    self.apps_combo.addItem(app.name)
+                # Select first item by default
+                if self.apps_combo.count() > 0:
+                    self.apps_combo.setCurrentIndex(0)
 
     def _on_refresh(self):
         """Handle refresh button click."""
@@ -1140,8 +1163,8 @@ class WorktreePanel(QWidget):
 
     def _on_item_double_clicked(self, index):
         """Handle double-click on worktree item."""
-        # Double-click opens in file manager
-        self._on_open_worktree()
+        # Double-click opens with the selected custom application
+        self._on_open_custom_app()
 
     def _on_search_changed(self, text: str):
         """Handle search text change."""
@@ -1182,12 +1205,6 @@ class WorktreePanel(QWidget):
             lambda: self.open_worktree_requested.emit(worktree.path, "file_manager")
         )
         menu.addAction(open_file_manager)
-
-        open_terminal = QAction("Open in Terminal", self)
-        open_terminal.triggered.connect(
-            lambda: self.open_worktree_requested.emit(worktree.path, "terminal")
-        )
-        menu.addAction(open_terminal)
 
         open_editor = QAction("Open in Editor", self)
         open_editor.triggered.connect(
@@ -1332,3 +1349,8 @@ class WorktreePanel(QWidget):
     def show_operation_success(self, message: str):
         """Show operation success message."""
         get_message_service().show_success(message)
+
+    def update_preferences(self, preferences):
+        """Update panel when preferences change."""
+        self.config.preferences = preferences
+        self.update_custom_applications()

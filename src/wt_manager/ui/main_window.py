@@ -198,6 +198,9 @@ class MainWindow(QMainWindow):
             self._on_refresh_worktrees_requested
         )
 
+        # Preferences connections
+        self.preferences_updated.connect(self.worktree_panel.update_preferences)
+
         # Command panel connections
         self.command_panel.cancel_command_requested.connect(self._cancel_single_command)
         self.command_panel_group.toggled.connect(self._on_command_panel_toggled)

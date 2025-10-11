@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class CustomApplication:
+    """
+    Configuration for a custom application that can open worktrees.
+
+    Attributes:
+        name: Display name of the application
+        command_template: Command template with %PATH% placeholder
+    """
+
+    name: str
+    command_template: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Serialize to dictionary."""
+        return {
+            "name": self.name,
+            "command_template": self.command_template,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> "CustomApplication":
+        """Deserialize from dictionary."""
+        return cls(
+            name=data["name"],
+            command_template=data["command_template"],
+        )
+
+
+@dataclass
 class UserPreferences:
     """
     User preferences and application settings.
@@ -30,6 +59,7 @@ class UserPreferences:
         max_command_history: Maximum number of commands to keep in history
         command_timeout: Default timeout for command execution in seconds
         git_fetch_on_create: Whether to fetch remote changes when creating worktrees
+        custom_applications: List of custom applications for opening worktrees
         window_geometry: Window geometry settings
         panel_sizes: Panel size preferences
     """
@@ -45,6 +75,7 @@ class UserPreferences:
     command_timeout: int = 300  # 5 minutes
     git_fetch_on_create: bool = True
     worktree_base_path: str = ""  # Base path for all worktrees
+    custom_applications: list[CustomApplication] = field(default_factory=list)
     window_geometry: dict[str, int] = field(default_factory=dict)
     panel_sizes: dict[str, int] = field(default_factory=dict)
 
@@ -66,6 +97,7 @@ class UserPreferences:
             "command_timeout": self.command_timeout,
             "git_fetch_on_create": self.git_fetch_on_create,
             "worktree_base_path": self.worktree_base_path,
+            "custom_applications": [app.to_dict() for app in self.custom_applications],
             "window_geometry": self.window_geometry,
             "panel_sizes": self.panel_sizes,
         }
@@ -81,6 +113,11 @@ class UserPreferences:
         Returns:
             UserPreferences: Deserialized preferences instance
         """
+        custom_applications = [
+            CustomApplication.from_dict(app_data)
+            for app_data in data.get("custom_applications", [])
+        ]
+
         return cls(
             theme=data.get("theme", "auto"),
             auto_refresh_interval=data.get("auto_refresh_interval", 30),
@@ -92,6 +129,7 @@ class UserPreferences:
             command_timeout=data.get("command_timeout", 300),
             git_fetch_on_create=data.get("git_fetch_on_create", True),
             worktree_base_path=data.get("worktree_base_path", ""),
+            custom_applications=custom_applications,
             window_geometry=data.get("window_geometry", {}),
             panel_sizes=data.get("panel_sizes", {}),
         )
