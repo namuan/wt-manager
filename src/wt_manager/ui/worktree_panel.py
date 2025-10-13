@@ -652,11 +652,13 @@ class WorktreePanel(QWidget):
     run_command_requested = pyqtSignal(str)  # worktree_path
     refresh_worktrees_requested = pyqtSignal(str)  # project_id
     get_available_branches_requested = pyqtSignal(str)  # project_id
+    available_branches_received = pyqtSignal(str, list)  # project_id, branches
 
-    def __init__(self, config=None, parent=None):
+    def __init__(self, config=None, worktree_service=None, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.worktree_service = worktree_service
 
         # Current state
         self._current_project: Project | None = None
@@ -873,6 +875,11 @@ class WorktreePanel(QWidget):
 
         # Remove automatic opening on combo box change - only open on double-click
         # self.apps_combo.activated.connect(self._on_open_custom_app)  # Commented out
+
+        # Signal connections for branch fetching
+        self.get_available_branches_requested.connect(
+            self._on_get_available_branches_requested
+        )
 
     def set_project(self, project: Project | None):
         """
@@ -1335,3 +1342,40 @@ class WorktreePanel(QWidget):
         """Update panel when preferences change."""
         self.config.preferences = preferences
         self.update_custom_applications()
+
+    def _on_get_available_branches_requested(self, project_id: str):
+        """Handle request for available branches."""
+        try:
+            # Find the project by ID
+            project = None
+            if (
+                hasattr(self, "_current_project")
+                and self._current_project
+                and self._current_project.id == project_id
+            ):
+                project = self._current_project
+
+            if not project:
+                self.logger.warning(
+                    f"Project not found for branch request: {project_id}"
+                )
+                self.available_branches_received.emit(project_id, [])
+                return
+
+            # Use worktree service to get available branches
+            if self.worktree_service:
+                branches = self.worktree_service.get_available_branches(project)
+                self.logger.debug(
+                    f"Retrieved {len(branches)} branches for project {project_id}: {branches}"
+                )
+                self.available_branches_received.emit(project_id, branches)
+            else:
+                self.logger.warning("No worktree service available for branch fetching")
+                self.available_branches_received.emit(project_id, [])
+
+        except Exception as e:
+            self.logger.error(
+                f"Error fetching available branches for project {project_id}: {e}"
+            )
+            # Emit empty list on error to avoid breaking the signal chain
+            self.available_branches_received.emit(project_id, [])

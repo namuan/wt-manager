@@ -472,6 +472,27 @@ class GitService(GitServiceInterface):
                 raise
             raise GitError(f"Failed to get branch list: {e}")
 
+    def get_local_branch_list(self, repo_path: str) -> list[str]:
+        """
+        Get list of local branches only.
+
+        Args:
+            repo_path: Path to the Git repository
+
+        Returns:
+            List[str]: List of local branch names
+
+        Raises:
+            GitError: If the operation fails
+        """
+        try:
+            return self._get_local_branches(repo_path)
+
+        except Exception as e:
+            if isinstance(e, GitError):
+                raise
+            raise GitError(f"Failed to get local branch list: {e}")
+
     def _get_local_branches(self, repo_path: str) -> list[str]:
         """Get list of local branches."""
         result = self._run_git_command(

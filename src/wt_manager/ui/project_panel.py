@@ -775,8 +775,10 @@ class ProjectPanel(QWidget):
         # Request available branches for the worktree creation tab
         self.get_available_branches_requested.emit(project_id)
 
-        # For now, use default branches - this will be updated when branches are received
-        available_branches = ["main", "master", "develop", "dev"]
+        # Use available branches if we have them, otherwise use defaults
+        available_branches = getattr(project, "available_branches", None)
+        if not available_branches:
+            available_branches = ["main", "master", "develop", "dev"]
 
         # Get base path from config (this would be passed from main window)
         # For now, use a worktrees directory in the workspace
@@ -793,6 +795,27 @@ class ProjectPanel(QWidget):
         dialog.create_worktree_requested.connect(self.create_worktree_requested.emit)
 
         dialog.exec()
+
+    def on_available_branches_received(self, project_id: str, branches: list[str]):
+        """
+        Handle received available branches for a project.
+
+        Args:
+            project_id: ID of the project
+            branches: List of available branch names
+        """
+        # Store the branches for later use
+        if project_id not in self._projects:
+            return
+
+        # Update the stored project with available branches
+        project = self._projects[project_id]
+        project.available_branches = branches
+
+        # This could be used to update any open dialogs
+        self.logger.debug(
+            f"Received {len(branches)} branches for project {project_id}: {branches}"
+        )
 
     def update_project_status_indicators(self):
         """Update status indicators for all projects in the list."""

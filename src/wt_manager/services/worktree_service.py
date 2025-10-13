@@ -394,9 +394,9 @@ class WorktreeService(WorktreeServiceInterface):
             ServiceError: If branches cannot be retrieved
         """
         try:
-            branches = self._git_service.get_branch_list(project.path)
+            branches = self._git_service.get_local_branch_list(project.path)
             logger.debug(
-                f"Retrieved {len(branches)} branches for project {project.name}"
+                f"Retrieved {len(branches)} local branches for project {project.name}"
             )
             return branches
 

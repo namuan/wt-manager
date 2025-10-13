@@ -20,6 +20,7 @@ from .command_dialog import CommandInputDialog
 from .command_output_widget import CommandOutputPanel
 from .preferences_dialog import PreferencesDialog
 from ..services.message_service import initialize_message_service
+from ..services.worktree_service import WorktreeService
 
 
 class MainWindow(QMainWindow):
@@ -41,7 +42,13 @@ class MainWindow(QMainWindow):
     refresh_worktrees_requested = pyqtSignal(str)  # project_id
     preferences_updated = pyqtSignal(object)  # UserPreferences
 
-    def __init__(self, command_service=None, validation_service=None, config=None):
+    def __init__(
+        self,
+        command_service=None,
+        validation_service=None,
+        worktree_service=None,
+        config=None,
+    ):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.settings = QSettings()
@@ -50,6 +57,7 @@ class MainWindow(QMainWindow):
         # Services
         self.command_service = command_service
         self.validation_service = validation_service
+        self.worktree_service = worktree_service or WorktreeService()
 
         # Current selections
         self._current_project_id = None
@@ -114,7 +122,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.project_panel)
 
         # Create worktree panel
-        self.worktree_panel = WorktreePanel(self.config)
+        self.worktree_panel = WorktreePanel(self.config, self.worktree_service)
         self.worktree_panel.setAccessibleName("Worktrees panel")
         self.worktree_panel.setToolTip(
             "Manage worktrees for the selected project - Create, remove, and open worktrees"
@@ -176,6 +184,11 @@ class MainWindow(QMainWindow):
         )
         self.project_panel.get_available_branches_requested.connect(
             self.worktree_panel.get_available_branches_requested.emit
+        )
+
+        # Connect worktree panel branches received back to project panel
+        self.worktree_panel.available_branches_received.connect(
+            self.project_panel.on_available_branches_received
         )
 
         # Worktree panel connections
