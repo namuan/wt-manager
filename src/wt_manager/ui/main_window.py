@@ -207,7 +207,7 @@ class MainWindow(QMainWindow):
         self.add_project_action.triggered.connect(self._on_add_project_menu)
         self.remove_project_action.triggered.connect(self._on_remove_project_menu)
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
-        self.new_worktree_action.triggered.connect(self._on_new_worktree_menu)
+
         self.remove_worktree_action.triggered.connect(self._on_remove_worktree_menu)
         self.open_worktree_action.triggered.connect(self._on_open_worktree_menu)
         self.run_command_action.triggered.connect(self._on_run_command_menu)
@@ -247,12 +247,6 @@ class MainWindow(QMainWindow):
 
         # Worktree menu
         worktree_menu = menubar.addMenu("&Worktree")
-
-        self.new_worktree_action = QAction("&New Worktree...", self)
-        self.new_worktree_action.setShortcut("Ctrl+W")
-        self.new_worktree_action.setStatusTip("Create a new worktree")
-        self.new_worktree_action.setEnabled(False)
-        worktree_menu.addAction(self.new_worktree_action)
 
         self.remove_worktree_action = QAction("&Remove Worktree", self)
         self.remove_worktree_action.setShortcut("Ctrl+R")
@@ -371,13 +365,11 @@ class MainWindow(QMainWindow):
 
         # Enable project-related actions
         self.remove_project_action.setEnabled(True)
-        self.new_worktree_action.setEnabled(True)
 
     def _on_project_deselected(self) -> None:
         """Handle project deselection."""
         self._current_project_id = None
         self.remove_project_action.setEnabled(False)
-        self.new_worktree_action.setEnabled(False)
 
     def _on_worktree_selected(self, worktree_path: str) -> None:
         """Handle worktree selection change."""
@@ -424,8 +416,9 @@ class MainWindow(QMainWindow):
     # Menu action handlers
     def _on_new_worktree_menu(self) -> None:
         """Handle new worktree menu action."""
-        # Delegate to worktree panel to show dialog
-        self.worktree_panel._on_new_worktree()
+        # This method is kept for compatibility but should not be called
+        # since the menu item was removed
+        pass
 
     def _on_remove_worktree_menu(self) -> None:
         """Handle remove worktree menu action."""
@@ -804,7 +797,6 @@ class MainWindow(QMainWindow):
 
         <h3>Worktree Operations</h3>
         <table>
-        <tr><td><b>Ctrl+W</b></td><td>Create new worktree</td></tr>
         <tr><td><b>Ctrl+R</b></td><td>Remove selected worktree</td></tr>
         <tr><td><b>Ctrl+O</b></td><td>Open worktree in file manager</td></tr>
         <tr><td><b>Ctrl+T</b></td><td>Run command in selected worktree</td></tr>

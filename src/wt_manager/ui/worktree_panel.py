@@ -709,12 +709,6 @@ class WorktreePanel(QWidget):
 
         header_layout.addStretch()
 
-        # New worktree button
-        self.new_worktree_btn = QPushButton("New Worktree")
-        self.new_worktree_btn.setEnabled(False)
-        self.new_worktree_btn.setToolTip("Create a new worktree")
-        header_layout.addWidget(self.new_worktree_btn)
-
         layout.addLayout(header_layout)
 
     def _create_filter_section(self, layout: QVBoxLayout):
@@ -861,7 +855,6 @@ class WorktreePanel(QWidget):
     def _setup_connections(self):
         """Set up signal-slot connections."""
         # Button connections
-        self.new_worktree_btn.clicked.connect(self._on_new_worktree)
         self.open_btn.clicked.connect(self._on_open_worktree)
         self.run_command_btn.clicked.connect(self._on_run_command)
         # self.apps_combo.activated.connect(self._on_open_custom_app)
@@ -893,12 +886,10 @@ class WorktreePanel(QWidget):
 
         if project:
             self.project_name_label.setText(project.get_display_name())
-            self.new_worktree_btn.setEnabled(True)
             self.refresh_btn.setEnabled(True)
             self._update_status_label(0)  # Will be updated when worktrees are loaded
         else:
             self.project_name_label.setText("No project selected")
-            self.new_worktree_btn.setEnabled(False)
             self.refresh_btn.setEnabled(False)
             self._update_status_label(0)
             self.clear_worktrees()
@@ -1086,21 +1077,9 @@ class WorktreePanel(QWidget):
     # Event handlers
     def _on_new_worktree(self):
         """Handle new worktree button click."""
-        if self._current_project:
-            # For now, use a default set of branches - this should be provided by the service layer
-            available_branches = ["main", "master", "develop", "dev"]
-
-            # Add branches from existing worktrees
-            for worktree in self._worktrees:
-                if (
-                    not worktree.is_detached
-                    and worktree.branch not in available_branches
-                ):
-                    available_branches.append(worktree.branch)
-
-            config = self.show_create_worktree_dialog(available_branches)
-            if config:
-                self.create_worktree_requested.emit(self._current_project.id, config)
+        # This method is kept for compatibility but should not be called
+        # since the button was removed
+        pass
 
     def _on_open_worktree(self):
         """Handle open worktree button click."""
