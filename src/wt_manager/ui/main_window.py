@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QSplitter,
     QLabel,
-    QFrame,
     QGroupBox,
     QDialog,
 )
@@ -75,7 +74,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu_bar()
         self._setup_toolbar()
-        self._setup_status_bar()
+        # self._setup_status_bar()
         self._setup_connections()
         self._restore_state()
 
@@ -330,32 +329,8 @@ class MainWindow(QMainWindow):
 
     def _setup_status_bar(self) -> None:
         """Set up the status bar."""
-        self.status_bar = self.statusBar()
-        self.status_bar.showMessage("Ready")
-
-        # Add permanent widgets to status bar
-        self.project_count_label = QLabel("No projects loaded")
-        self.status_bar.addPermanentWidget(self.project_count_label)
-
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.VLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        self.status_bar.addPermanentWidget(separator)
-
-        # Worktree count
-        self.worktree_count_label = QLabel("No worktrees")
-        self.status_bar.addPermanentWidget(self.worktree_count_label)
-
-        # Another separator
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.Shape.VLine)
-        separator2.setFrameShadow(QFrame.Shadow.Sunken)
-        self.status_bar.addPermanentWidget(separator2)
-
-        # Operation status
-        self.operation_status_label = QLabel("Ready")
-        self.status_bar.addPermanentWidget(self.operation_status_label)
+        # Status bar removed
+        pass
 
     def _toggle_command_panel(self, checked: bool) -> None:
         """Toggle the command output panel visibility."""
@@ -468,7 +443,8 @@ class MainWindow(QMainWindow):
 
     def update_status(self, message: str, timeout: int = 3000) -> None:
         """Update the status bar message."""
-        self.status_bar.showMessage(message, timeout)
+        # Status bar removed
+        self.logger.info(f"Status update: {message}")
 
     def show_message(self, message: str, timeout: int = 3000) -> None:
         """
@@ -479,25 +455,18 @@ class MainWindow(QMainWindow):
 
     def update_operation_status(self, status: str) -> None:
         """Update the operation status in the status bar."""
-        self.operation_status_label.setText(status)
+        # Status bar removed
+        pass
 
     def update_project_count(self, count: int) -> None:
         """Update the project count in the status bar."""
-        if count == 0:
-            self.project_count_label.setText("No projects loaded")
-        elif count == 1:
-            self.project_count_label.setText("1 project loaded")
-        else:
-            self.project_count_label.setText(f"{count} projects loaded")
+        # Status bar removed
+        pass
 
     def update_worktree_count(self, count: int) -> None:
         """Update the worktree count in the status bar."""
-        if count == 0:
-            self.worktree_count_label.setText("No worktrees")
-        elif count == 1:
-            self.worktree_count_label.setText("1 worktree")
-        else:
-            self.worktree_count_label.setText(f"{count} worktrees")
+        # Status bar removed
+        pass
 
     def show_progress(self, message: str = "") -> None:
         """Show progress indication with optional message."""
@@ -783,7 +752,6 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import (
             QDialog,
             QVBoxLayout,
-            QLabel,
             QDialogButtonBox,
             QScrollArea,
         )
