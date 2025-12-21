@@ -453,6 +453,13 @@ class ProjectPanel(QWidget):
         self.project_list.setAlternatingRowColors(True)
         self.project_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.project_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+
+        # Increase font size and item spacing
+        font = self.project_list.font()
+        font.setPointSize(14)
+        self.project_list.setFont(font)
+        self.project_list.setSpacing(4)
+
         layout.addWidget(self.project_list)
 
         # Action buttons
