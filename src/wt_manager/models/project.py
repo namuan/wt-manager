@@ -15,6 +15,7 @@ class ProjectStatus(Enum):
     """Status enumeration for projects."""
 
     ACTIVE = "active"
+    MODIFIED = "modified"
     INACTIVE = "inactive"
     ERROR = "error"
     UNAVAILABLE = "unavailable"

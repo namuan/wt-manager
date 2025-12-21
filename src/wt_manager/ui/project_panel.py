@@ -651,6 +651,7 @@ class ProjectPanel(QWidget):
         """Get status icon for project status."""
         icons = {
             ProjectStatus.ACTIVE: "●",
+            ProjectStatus.MODIFIED: "●",
             ProjectStatus.INACTIVE: "○",
             ProjectStatus.ERROR: "✗",
             ProjectStatus.UNAVAILABLE: "⚠",
@@ -675,6 +676,8 @@ class ProjectPanel(QWidget):
             item.setForeground(Qt.GlobalColor.gray)
         elif status == ProjectStatus.INACTIVE:
             item.setForeground(Qt.GlobalColor.darkGray)
+        elif status == ProjectStatus.MODIFIED:
+            item.setForeground(Qt.GlobalColor.darkYellow)
         # ACTIVE projects use default color
 
     def _update_status_label(self, count: int):

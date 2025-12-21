@@ -378,7 +378,10 @@ class ProjectService(ProjectServiceInterface):
                 else:
                     project.status = ProjectStatus.ERROR
             else:
-                project.status = ProjectStatus.ACTIVE
+                if self._git_service.check_uncommitted_changes(project.path):
+                    project.status = ProjectStatus.MODIFIED
+                else:
+                    project.status = ProjectStatus.ACTIVE
 
             return project
 
