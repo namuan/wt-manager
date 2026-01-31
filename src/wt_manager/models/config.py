@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,44 @@ from .project import Project
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_repository_root(worktree_path: str) -> str:
+    """
+    Get the repository root path from a worktree path.
+
+    Args:
+        worktree_path: Path to a git worktree
+
+    Returns:
+        str: Repository root path
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception as e:
+        logger.debug(f"Failed to get repository root via git command: {e}")
+
+    # Fallback: walk up directory tree to find .git
+    current_path = Path(worktree_path).resolve()
+    while current_path != current_path.parent:
+        git_dir = current_path / ".git"
+        if git_dir.exists():
+            return str(current_path)
+        current_path = current_path.parent
+
+    # If all else fails, return the worktree path itself
+    logger.warning(
+        f"Could not find repository root for {worktree_path}, using path as-is"
+    )
+    return worktree_path
 
 
 @dataclass
@@ -224,7 +263,7 @@ class AppConfig:
         version: Configuration version for migration purposes
         projects: List of project configurations
         preferences: User preferences and settings
-        command_history: Command execution history by worktree path
+        command_history: Command execution history by repository root path
         last_selected_project: ID of the last selected project
         created_at: Timestamp when configuration was first created
         updated_at: Timestamp when configuration was last updated
@@ -351,20 +390,20 @@ class AppConfig:
         Args:
             execution: CommandExecution instance to add
         """
-        worktree_path = execution.worktree_path
+        repo_root = _get_repository_root(execution.worktree_path)
 
-        if worktree_path not in self.command_history:
-            self.command_history[worktree_path] = CommandHistory(
-                worktree_path=worktree_path,
+        if repo_root not in self.command_history:
+            self.command_history[repo_root] = CommandHistory(
+                worktree_path=repo_root,
                 max_history_size=self.preferences.max_command_history,
             )
 
-        self.command_history[worktree_path].add_execution(execution)
+        self.command_history[repo_root].add_execution(execution)
         self.updated_at = datetime.now()
 
     def get_command_history(self, worktree_path: str) -> CommandHistory | None:
         """
-        Get command history for a specific worktree.
+        Get command history for a specific worktree's repository.
 
         Args:
             worktree_path: Path to the worktree
@@ -372,19 +411,21 @@ class AppConfig:
         Returns:
             Optional[CommandHistory]: Command history if exists, None otherwise
         """
-        return self.command_history.get(worktree_path)
+        repo_root = _get_repository_root(worktree_path)
+        return self.command_history.get(repo_root)
 
     def clear_command_history(self, worktree_path: str | None = None) -> None:
         """
-        Clear command history for a specific worktree or all history.
+        Clear command history for a specific worktree's repository or all history.
 
         Args:
             worktree_path: Path to the worktree (None to clear all history)
         """
         if worktree_path:
-            if worktree_path in self.command_history:
-                del self.command_history[worktree_path]
-                logger.info(f"Cleared command history for worktree: {worktree_path}")
+            repo_root = _get_repository_root(worktree_path)
+            if repo_root in self.command_history:
+                del self.command_history[repo_root]
+                logger.info(f"Cleared command history for repository: {repo_root}")
         else:
             self.command_history.clear()
             logger.info("Cleared all command history")
@@ -393,26 +434,26 @@ class AppConfig:
 
     def _cleanup_project_command_history(self, project_path: str) -> None:
         """
-        Clean up command history for worktrees belonging to a removed project.
+        Clean up command history for repositories belonging to a removed project.
 
         Args:
             project_path: Path to the removed project
         """
         project_path_obj = Path(project_path)
-        worktrees_to_remove = []
+        repos_to_remove = []
 
-        for worktree_path in self.command_history.keys():
-            worktree_path_obj = Path(worktree_path)
+        for repo_root in self.command_history.keys():
+            repo_root_obj = Path(repo_root)
             try:
-                # Check if worktree is under the project path
-                worktree_path_obj.relative_to(project_path_obj)
-                worktrees_to_remove.append(worktree_path)
+                # Check if repository root is under the project path or is the project path
+                repo_root_obj.relative_to(project_path_obj)
+                repos_to_remove.append(repo_root)
             except ValueError:
-                # Worktree is not under this project path
+                # Repository root is not under this project path
                 continue
 
-        for worktree_path in worktrees_to_remove:
-            del self.command_history[worktree_path]
+        for repo_root in repos_to_remove:
+            del self.command_history[repo_root]
 
     def save(self, config_file: Path | None = None) -> bool:
         """

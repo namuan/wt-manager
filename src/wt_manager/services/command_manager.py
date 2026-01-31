@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,6 +11,47 @@ from typing import Any
 from ..models.command_execution import CommandExecution, CommandHistory, CommandStatus
 from ..services.base import ServiceError
 from ..utils.path_manager import PathManager
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_repository_root(worktree_path: str) -> str:
+    """
+    Get the repository root path from a worktree path.
+
+    Args:
+        worktree_path: Path to a git worktree
+
+    Returns:
+        str: Repository root path
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception as e:
+        logger.debug(f"Failed to get repository root via git command: {e}")
+
+    # Fallback: walk up directory tree to find .git
+    current_path = Path(worktree_path).resolve()
+    while current_path != current_path.parent:
+        git_dir = current_path / ".git"
+        if git_dir.exists():
+            return str(current_path)
+        current_path = current_path.parent
+
+    # If all else fails, return the worktree path itself
+    logger.warning(
+        f"Could not find repository root for {worktree_path}, using path as-is"
+    )
+    return worktree_path
 
 
 class CommandExecutionState:
@@ -24,9 +66,7 @@ class CommandExecutionState:
         """Initialize the command execution state."""
         self._lock = threading.RLock()
         self._active_executions: dict[str, CommandExecution] = {}
-        self._execution_history: dict[
-            str, CommandHistory
-        ] = {}  # worktree_path -> history
+        self._execution_history: dict[str, CommandHistory] = {}  # repo_root -> history
         self._global_history = CommandHistory()
         self._state_file: Path | None = None
         self._logger = logging.getLogger(__name__)
@@ -68,17 +108,19 @@ class CommandExecutionState:
             # Add to global history
             self._global_history.add_execution(execution)
 
-            # Add to worktree-specific history
-            worktree_path = execution.worktree_path
-            if worktree_path not in self._execution_history:
-                self._execution_history[worktree_path] = CommandHistory(worktree_path)
+            # Add to repository-specific history
+            repo_root = get_repository_root(execution.worktree_path)
+            if repo_root not in self._execution_history:
+                self._execution_history[repo_root] = CommandHistory(repo_root)
 
-            self._execution_history[worktree_path].add_execution(execution)
+            self._execution_history[repo_root].add_execution(execution)
 
             # Update statistics
             self._total_executions += 1
 
-            self._logger.debug(f"Added execution to state: {execution.id}")
+            self._logger.debug(
+                f"Added execution to state: {execution.id} (repo: {repo_root})"
+            )
 
     def update_execution(self, execution: CommandExecution) -> None:
         """
@@ -147,17 +189,18 @@ class CommandExecutionState:
         self, worktree_path: str, limit: int = 50
     ) -> list[CommandExecution]:
         """
-        Get executions for a specific worktree.
+        Get executions for a specific worktree's repository.
 
         Args:
             worktree_path: Path to the worktree
             limit: Maximum number of executions to return
 
         Returns:
-            List[CommandExecution]: List of executions for the worktree
+            List[CommandExecution]: List of executions for the repository
         """
         with self._lock:
-            history = self._execution_history.get(worktree_path)
+            repo_root = get_repository_root(worktree_path)
+            history = self._execution_history.get(repo_root)
             if history:
                 return history.get_recent_executions(limit)
             return []
@@ -200,7 +243,7 @@ class CommandExecutionState:
                 "successful_executions": self._successful_executions,
                 "failed_executions": self._failed_executions,
                 "success_rate": round(success_rate, 2),
-                "worktree_count": len(self._execution_history),
+                "repository_count": len(self._execution_history),
                 "global_history_size": len(self._global_history),
             }
 
@@ -244,13 +287,14 @@ class CommandExecutionState:
         Clear execution history.
 
         Args:
-            worktree_path: Optional worktree path to clear (None for all)
+            worktree_path: Optional worktree path to clear its repository history (None for all)
         """
         with self._lock:
             if worktree_path:
-                if worktree_path in self._execution_history:
-                    self._execution_history[worktree_path].clear_history()
-                    self._logger.info(f"Cleared history for worktree: {worktree_path}")
+                repo_root = get_repository_root(worktree_path)
+                if repo_root in self._execution_history:
+                    self._execution_history[repo_root].clear_history()
+                    self._logger.info(f"Cleared history for repository: {repo_root}")
             else:
                 self._global_history.clear_history()
                 self._execution_history.clear()
@@ -274,7 +318,7 @@ class CommandExecutionState:
                         "failed_executions": self._failed_executions,
                     },
                     "global_history": self._global_history.to_dict(),
-                    "worktree_histories": {
+                    "repository_histories": {
                         path: history.to_dict()
                         for path, history in self._execution_history.items()
                     },
@@ -313,9 +357,13 @@ class CommandExecutionState:
                 if global_history_data:
                     self._global_history = CommandHistory.from_dict(global_history_data)
 
-                # Load worktree histories
-                worktree_histories = state_data.get("worktree_histories", {})
-                for path, history_data in worktree_histories.items():
+                # Load repository histories (support both old and new format)
+                repo_histories = state_data.get("repository_histories", {})
+                if not repo_histories:
+                    # Backward compatibility: try loading old worktree_histories
+                    repo_histories = state_data.get("worktree_histories", {})
+
+                for path, history_data in repo_histories.items():
                     self._execution_history[path] = CommandHistory.from_dict(
                         history_data
                     )
@@ -422,14 +470,14 @@ class CommandManager:
         self, worktree_path: str, limit: int = 50
     ) -> list[CommandExecution]:
         """
-        Get command history for a specific worktree.
+        Get command history for a specific worktree's repository.
 
         Args:
             worktree_path: Path to the worktree
             limit: Maximum number of executions to return
 
         Returns:
-            List[CommandExecution]: List of executions for the worktree
+            List[CommandExecution]: List of executions for the repository
         """
         if not self._initialized:
             raise ServiceError("CommandManager not initialized")
@@ -528,7 +576,7 @@ class CommandManager:
         Clear execution history.
 
         Args:
-            worktree_path: Optional worktree path to clear (None for all)
+            worktree_path: Optional worktree path to clear its repository history (None for all)
         """
         if not self._initialized:
             raise ServiceError("CommandManager not initialized")
