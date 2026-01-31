@@ -61,7 +61,16 @@ class CommandInputDialog(QDialog):
         """
         super().__init__(parent)
         self.worktree_path = worktree_path
-        self.command_history = command_history or []
+
+        # Deduplicate history while preserving order
+        self.command_history = []
+        if command_history:
+            seen = set()
+            for cmd in command_history:
+                if cmd not in seen:
+                    self.command_history.append(cmd)
+                    seen.add(cmd)
+
         self.validation_service = validation_service or ValidationService()
         self.logger = logging.getLogger(__name__)
 
@@ -465,12 +474,18 @@ class CommandInputDialog(QDialog):
 
     def add_to_history(self, command: str) -> None:
         """Add a command to the history for future auto-completion."""
-        if command and command not in self.command_history:
-            self.command_history.insert(0, command)
-            # Keep only last 50 commands
-            self.command_history = self.command_history[:50]
+        if not command:
+            return
 
-            # Update auto-completion
-            if self.command_input.completer():
-                model = QStringListModel(self.command_history)
-                self.command_input.completer().setModel(model)
+        # Remove existing occurrence if present to move it to the top
+        if command in self.command_history:
+            self.command_history.remove(command)
+
+        self.command_history.insert(0, command)
+        # Keep only last 50 commands
+        self.command_history = self.command_history[:50]
+
+        # Update auto-completion
+        if self.command_input.completer():
+            model = QStringListModel(self.command_history)
+            self.command_input.completer().setModel(model)
