@@ -20,12 +20,32 @@ def _get_repository_root(worktree_path: str) -> str:
     """
     Get the repository root path from a worktree path.
 
+    For git worktrees, this returns the main repository path (not the worktree path),
+    so command history is shared across all worktrees of the same repository.
+
     Args:
         worktree_path: Path to a git worktree
 
     Returns:
-        str: Repository root path
+        str: Repository root path (main repo, not worktree-specific)
     """
+    try:
+        # Get the common git directory (shared across all worktrees)
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            git_common_dir = Path(result.stdout.strip()).resolve()
+            # The parent of .git is the main repository root
+            return str(git_common_dir.parent)
+    except Exception as e:
+        logger.debug(f"Failed to get repository root via git command: {e}")
+
+    # Fallback: use show-toplevel (works for non-worktree repos)
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -37,7 +57,7 @@ def _get_repository_root(worktree_path: str) -> str:
         if result.returncode == 0:
             return result.stdout.strip()
     except Exception as e:
-        logger.debug(f"Failed to get repository root via git command: {e}")
+        logger.debug(f"Failed to get toplevel via git command: {e}")
 
     # Fallback: walk up directory tree to find .git
     current_path = Path(worktree_path).resolve()
