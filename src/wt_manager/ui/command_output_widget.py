@@ -26,6 +26,7 @@ class CommandExecutionWidget(QWidget):
         super().__init__(parent)
         self.execution = execution
         self.logger = logging.getLogger(__name__)
+        self._is_expanded = False
 
         self._setup_ui()
         self._update_display()
@@ -46,6 +47,13 @@ class CommandExecutionWidget(QWidget):
         header_layout.addWidget(self.command_label)
 
         header_layout.addStretch()
+
+        # Expand/collapse button
+        self.expand_btn = QPushButton("▼ Expand")
+        self.expand_btn.setMaximumWidth(80)
+        self.expand_btn.setToolTip("Expand to view full output")
+        self.expand_btn.clicked.connect(self._toggle_expand)
+        header_layout.addWidget(self.expand_btn)
 
         # Status indicator
         self.status_label = QLabel()
@@ -164,6 +172,21 @@ class CommandExecutionWidget(QWidget):
         """Update with new execution data."""
         self.execution = execution
         self._update_display()
+
+    def _toggle_expand(self) -> None:
+        """Toggle between expanded and collapsed output view."""
+        self._is_expanded = not self._is_expanded
+
+        if self._is_expanded:
+            self.output_text.setMaximumHeight(16777215)  # Qt max height
+            self.expand_btn.setText("▲ Collapse")
+            self.expand_btn.setToolTip("Collapse output")
+            self.logger.debug(f"Expanded output for execution {self.execution.id}")
+        else:
+            self.output_text.setMaximumHeight(200)
+            self.expand_btn.setText("▼ Expand")
+            self.expand_btn.setToolTip("Expand to view full output")
+            self.logger.debug(f"Collapsed output for execution {self.execution.id}")
 
 
 class CommandOutputPanel(QWidget):

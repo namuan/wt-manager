@@ -217,6 +217,34 @@ class TestCommandOutputWidget:
         execution_widget.append_output("Error message\n", is_error=True)
         assert "Error message" in execution_widget.output_text.toPlainText()
 
+    def test_execution_widget_expand_collapse(self, execution_widget, qtbot):
+        """Test expand/collapse functionality."""
+        from PyQt6.QtTest import QTest
+        from PyQt6.QtCore import Qt
+
+        # Initially should be collapsed
+        assert not execution_widget._is_expanded
+        assert execution_widget.output_text.maximumHeight() == 200
+        assert "▼ Expand" in execution_widget.expand_btn.text()
+
+        # Click expand button
+        QTest.mouseClick(execution_widget.expand_btn, Qt.MouseButton.LeftButton)
+        qtbot.wait(10)
+
+        # Should now be expanded
+        assert execution_widget._is_expanded
+        assert execution_widget.output_text.maximumHeight() == 16777215
+        assert "▲ Collapse" in execution_widget.expand_btn.text()
+
+        # Click collapse button
+        QTest.mouseClick(execution_widget.expand_btn, Qt.MouseButton.LeftButton)
+        qtbot.wait(10)
+
+        # Should be collapsed again
+        assert not execution_widget._is_expanded
+        assert execution_widget.output_text.maximumHeight() == 200
+        assert "▼ Expand" in execution_widget.expand_btn.text()
+
     def test_output_panel_initialization(self, output_panel):
         """Test output panel initializes correctly."""
         assert output_panel.title_label.text() == "Command Output"
