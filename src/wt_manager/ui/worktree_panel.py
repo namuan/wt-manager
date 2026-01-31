@@ -692,9 +692,6 @@ class WorktreePanel(QWidget):
         # Action buttons
         self._create_action_buttons(layout)
 
-        # Status section
-        self._create_status_section(layout)
-
     def _create_header_section(self, layout: QVBoxLayout):
         """Create the header section with title and project info."""
         header_layout = QHBoxLayout()
@@ -816,14 +813,6 @@ class WorktreePanel(QWidget):
 
         layout.addLayout(actions_layout)
 
-    def _create_status_section(self, layout: QVBoxLayout):
-        """Create status section."""
-        self.status_label = QLabel("No project selected")
-        self.status_label.setStyleSheet(
-            "color: #666; font-style: italic; padding: 4px;"
-        )
-        layout.addWidget(self.status_label)
-
     def _setup_model(self):
         """Set up the data model and view."""
         # Set up filter model
@@ -894,11 +883,9 @@ class WorktreePanel(QWidget):
         if project:
             self.project_name_label.setText(project.get_display_name())
             self.refresh_btn.setEnabled(True)
-            self._update_status_label(0)  # Will be updated when worktrees are loaded
         else:
             self.project_name_label.setText("No project selected")
             self.refresh_btn.setEnabled(False)
-            self._update_status_label(0)
             self.clear_worktrees()
 
     def populate_worktrees(self, worktrees: list[Worktree]):
@@ -922,9 +909,6 @@ class WorktreePanel(QWidget):
         # Add worktree items
         for worktree in worktrees:
             self._add_worktree_item(worktree)
-
-        # Update status
-        self._update_status_label(len(worktrees))
 
         # Resize columns to content
         self.worktree_view.resizeColumnToContents(1)  # Branch
@@ -1008,17 +992,6 @@ class WorktreePanel(QWidget):
         if index >= 0:
             self.branch_filter.setCurrentIndex(index)
 
-    def _update_status_label(self, count: int):
-        """Update the status label with worktree count."""
-        if not self._current_project:
-            self.status_label.setText("No project selected")
-        elif count == 0:
-            self.status_label.setText("No worktrees found")
-        elif count == 1:
-            self.status_label.setText("1 worktree")
-        else:
-            self.status_label.setText(f"{count} worktrees")
-
     def clear_worktrees(self):
         """Clear all worktrees from the list."""
         self.model.clear()
@@ -1028,7 +1001,6 @@ class WorktreePanel(QWidget):
         self._worktrees.clear()
         self._current_worktree_path = None
         self._update_button_states()
-        self._update_status_label(0)
 
     def get_selected_worktree(self) -> Worktree | None:
         """Get the currently selected worktree."""
