@@ -277,9 +277,6 @@ class TestProjectPanel:
         # Check that projects are stored internally
         assert len(panel._projects) == len(sample_projects)
 
-        # Check status label
-        assert "3 projects loaded" in panel.status_label.text()
-
     def test_project_selection(self, app, sample_projects):
         """Test project selection functionality."""
         panel = ProjectPanel()
@@ -396,7 +393,6 @@ class TestProjectPanel:
         assert len(panel._projects) == 0
         assert panel._current_project_id is None
         assert not panel.remove_btn.isEnabled()
-        assert "No projects loaded" in panel.status_label.text()
 
     def test_project_health_display(self, app, sample_projects):
         """Test project health dialog display."""

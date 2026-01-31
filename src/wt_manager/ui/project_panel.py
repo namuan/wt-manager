@@ -476,13 +476,6 @@ class ProjectPanel(QWidget):
 
         layout.addLayout(actions_layout)
 
-        # Status label
-        self.status_label = QLabel("No projects loaded")
-        self.status_label.setStyleSheet(
-            "color: #666; font-style: italic; padding: 4px;"
-        )
-        layout.addWidget(self.status_label)
-
     def _setup_connections(self):
         """Set up signal-slot connections."""
         self.add_btn.clicked.connect(self._on_add_project)
@@ -642,9 +635,6 @@ class ProjectPanel(QWidget):
 
             self.project_list.addItem(item)
 
-        # Update status label
-        self._update_status_label(len(projects))
-
         self.logger.debug(f"Populated project list with {len(projects)} projects")
 
     def _get_status_icon(self, status: ProjectStatus) -> str:
@@ -680,22 +670,12 @@ class ProjectPanel(QWidget):
             item.setForeground(Qt.GlobalColor.darkYellow)
         # ACTIVE projects use default color
 
-    def _update_status_label(self, count: int):
-        """Update the status label with project count."""
-        if count == 0:
-            self.status_label.setText("No projects loaded")
-        elif count == 1:
-            self.status_label.setText("1 project loaded")
-        else:
-            self.status_label.setText(f"{count} projects loaded")
-
     def clear_projects(self):
         """Clear all projects from the list."""
         self.project_list.clear()
         self._projects.clear()
         self._current_project_id = None
         self.remove_btn.setEnabled(False)
-        self._update_status_label(0)
 
     def get_selected_project_id(self) -> str | None:
         """Get the currently selected project ID."""
