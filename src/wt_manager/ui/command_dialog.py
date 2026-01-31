@@ -229,14 +229,6 @@ class CommandInputDialog(QDialog):
         self.history_list.addItems(self.command_history[:10])  # Show last 10 commands
         history_layout.addWidget(self.history_list)
 
-        history_buttons_layout = QHBoxLayout()
-        self.use_history_btn = QPushButton("Use Selected")
-        self.use_history_btn.setEnabled(False)
-        history_buttons_layout.addWidget(self.use_history_btn)
-
-        history_buttons_layout.addStretch()
-        history_layout.addLayout(history_buttons_layout)
-
         layout.addWidget(history_group)
 
     def _create_buttons(self, layout: QVBoxLayout) -> None:
@@ -274,7 +266,6 @@ class CommandInputDialog(QDialog):
         # History
         if hasattr(self, "history_list"):
             self.history_list.currentTextChanged.connect(self._on_history_changed)
-            self.use_history_btn.clicked.connect(self._use_history_command)
 
     def _setup_auto_completion(self) -> None:
         """Set up auto-completion for command input."""
@@ -346,16 +337,12 @@ class CommandInputDialog(QDialog):
 
     def _on_history_changed(self, text: str) -> None:
         """Handle history selection change."""
-        if hasattr(self, "use_history_btn"):
-            self.use_history_btn.setEnabled(text and text != "Select from history...")
+        if not text or text == "Select from history...":
+            return
 
-    def _use_history_command(self) -> None:
-        """Use selected command from history."""
-        if hasattr(self, "history_list"):
-            command = self.history_list.currentText()
-            if command and command != "Select from history...":
-                self.command_input.setText(command)
-                self.command_input.setFocus()
+        # Auto-populate command input directly from selection.
+        self.command_input.setText(text)
+        self.command_input.setFocus()
 
     def _validate_command(self) -> None:
         """Validate the entered command."""
